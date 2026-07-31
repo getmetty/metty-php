@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$root"
+
+composer install --no-interaction --prefer-dist
+composer validate --no-check-publish
+vendor/bin/phpstan analyse --memory-limit=512M
+vendor/bin/phpunit

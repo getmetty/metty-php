@@ -1,0 +1,21 @@
+name: qa
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  qa:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        # Spodná hranica podpory aj aktuálna verzia — klient beží u zákazníka, nie u nás.
+        php: ['8.1', '8.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          coverage: none
+      - run: ./qa
