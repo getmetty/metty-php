@@ -8,7 +8,7 @@ Bez frameworkovej závislosti: HTTP ide cez PSR-18 klienta a PSR-17 factory, kto
 ## Inštalácia
 
 ```bash
-composer require metty/php-client
+composer require getmetty/metty-php
 ```
 
 Ak v projekte ešte nemáte PSR-18 klienta, doinštalujte si ľubovoľnú implementáciu, napr.:
