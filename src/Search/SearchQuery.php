@@ -9,38 +9,41 @@ use Metty\Client\Exception\ConfigurationException;
 /**
  * Stavač parametrov `GET /search`.
  *
- * Facetová sémantika kopíruje server: `filter()` je OR v rámci poľa a AND medzi poľami,
- * `filterAll()` je AND aj v rámci poľa a `exclude()` je negácia.
+ * Facety sú bežné polia z feedu: `facet('Farba', 'biela')` je AND medzi poľami a OR medzi hodnotami
+ * jedného poľa. Hranice servera (`per_page`, okno 200 výsledkov, zoznam radení) sa kontrolujú tu,
+ * aby chyba prišla pred requestom, nie ako `422` zo servera.
  */
 final class SearchQuery
 {
-    private const SORTABLE = ['price', 'name', 'brand', 'availability'];
+    /** Stránkovanie končí na prvých 200 výsledkoch; hlbšie sa už neranguje. */
+    public const MAX_WINDOW = 200;
+
+    public const MAX_PER_PAGE = 100;
+
+    public const SORTS = ['relevance', 'price_asc', 'price_desc', 'name_asc'];
+
+    public const SECTIONS = ['facets', 'categories', 'suggestions'];
+
+    private const RESERVED = ['key', 'q', 'page', 'per_page', 'category', 'price_min', 'price_max', 'sort', 'include'];
 
     /** @var list<string> */
-    private array $any = [];
+    private array $categories = [];
 
-    /** @var list<string> */
-    private array $all = [];
-
-    /** @var list<string> */
-    private array $none = [];
-
-    /** @var array<string, int> */
+    /** @var array<string, list<string>> */
     private array $facets = [];
 
-    /** @var list<string> */
-    private array $hitFields = [];
+    private ?float $priceMin = null;
 
-    /** @var list<string> */
-    private array $removeFields = [];
+    private ?float $priceMax = null;
 
-    private int $size = 10;
+    private int $page = 1;
 
-    private ?int $from = null;
-
-    private ?int $page = null;
+    private int $perPage = 24;
 
     private ?string $sort = null;
+
+    /** @var list<string> */
+    private array $include = [];
 
     private function __construct(
         private readonly string $query,
@@ -51,102 +54,81 @@ final class SearchQuery
         return new self($query);
     }
 
-    public function filter(string $facet, string $value): self
+    /**
+     * Cesta kategórie v tvare, v akom ju vracia `category` produktu, napr. `Náradie > Vŕtačky`.
+     */
+    public function category(string $path): self
     {
-        $this->any[] = $facet . ':' . $value;
+        $this->categories[] = $path;
 
         return $this;
     }
 
-    public function filterAll(string $facet, string $value): self
+    public function facet(string $field, string $value): self
     {
-        $this->all[] = $facet . ':' . $value;
-
-        return $this;
-    }
-
-    public function exclude(string $facet, string $value): self
-    {
-        $this->none[] = $facet . ':' . $value;
-
-        return $this;
-    }
-
-    public function range(string $facet, ?float $min, ?float $max): self
-    {
-        if ($min === null && $max === null) {
-            throw new ConfigurationException('A range needs at least one bound.');
+        if (in_array($field, self::RESERVED, true)) {
+            throw new ConfigurationException(sprintf('The name "%s" is a reserved search parameter and cannot be a facet.', $field));
         }
 
-        $this->any[] = sprintf('%s:%s|%s', $facet, $min ?? '', $max ?? '');
+        $this->facets[$field][] = $value;
 
         return $this;
     }
 
-    public function missing(string $facet): self
+    public function priceRange(?float $min, ?float $max): self
     {
-        $this->any[] = $facet . ':value_missing';
+        if ($min === null && $max === null) {
+            throw new ConfigurationException('A price range needs at least one bound.');
+        }
 
-        return $this;
-    }
-
-    public function facet(string $facet, int $limit = 10): self
-    {
-        $this->facets[$facet] = $limit;
-
-        return $this;
-    }
-
-    public function size(int $size): self
-    {
-        $this->size = $size;
+        $this->priceMin = $min;
+        $this->priceMax = $max;
 
         return $this;
     }
 
     public function page(int $page): self
     {
-        $this->page = $page;
-        $this->from = null;
-
-        return $this;
-    }
-
-    public function from(int $from): self
-    {
-        $this->from = $from;
-        $this->page = null;
-
-        return $this;
-    }
-
-    public function sortBy(string $field, string $direction = 'asc'): self
-    {
-        if (!in_array($field, self::SORTABLE, true)) {
-            throw new ConfigurationException(sprintf('Sorting supports only: %s.', implode(', ', self::SORTABLE)));
+        if ($page < 1) {
+            throw new ConfigurationException('The page must be at least 1.');
         }
 
-        $this->sort = $field . ':' . strtolower($direction);
+        $this->page = $page;
 
         return $this;
     }
 
-    /**
-     * @param list<string> $fields
-     */
-    public function onlyFields(array $fields): self
+    public function perPage(int $perPage): self
     {
-        $this->hitFields = $fields;
+        if ($perPage < 1 || $perPage > self::MAX_PER_PAGE) {
+            throw new ConfigurationException(sprintf('The per_page must be between 1 and %d.', self::MAX_PER_PAGE));
+        }
+
+        $this->perPage = $perPage;
 
         return $this;
     }
 
-    /**
-     * @param list<string> $fields
-     */
-    public function withoutFields(array $fields): self
+    public function sortBy(string $sort): self
     {
-        $this->removeFields = $fields;
+        if (!in_array($sort, self::SORTS, true)) {
+            throw new ConfigurationException(sprintf('Sorting supports only: %s.', implode(', ', self::SORTS)));
+        }
+
+        $this->sort = $sort;
+
+        return $this;
+    }
+
+    public function withSections(string ...$sections): self
+    {
+        foreach ($sections as $section) {
+            if (!in_array($section, self::SECTIONS, true)) {
+                throw new ConfigurationException(sprintf('Unknown section "%s"; supported are: %s.', $section, implode(', ', self::SECTIONS)));
+            }
+        }
+
+        $this->include = array_values($sections);
 
         return $this;
     }
@@ -156,23 +138,25 @@ final class SearchQuery
      */
     public function toQueryParameters(): array
     {
-        $facets = [];
-        foreach ($this->facets as $facet => $limit) {
-            $facets[] = $facet . ':' . $limit;
+        if ($this->page * $this->perPage > self::MAX_WINDOW) {
+            throw new ConfigurationException(sprintf('The requested page is beyond the first %d results.', self::MAX_WINDOW));
         }
 
-        return array_filter([
+        $parameters = [
             'q' => $this->query,
-            'size' => $this->size,
             'page' => $this->page,
-            'from' => $this->from,
+            'per_page' => $this->perPage,
+            'category' => $this->categories === [] ? null : $this->categories,
+            'price_min' => $this->priceMin,
+            'price_max' => $this->priceMax,
             'sort' => $this->sort,
-            'f' => $this->any === [] ? null : $this->any,
-            'f_must' => $this->all === [] ? null : $this->all,
-            'neg_f' => $this->none === [] ? null : $this->none,
-            'facets' => $facets === [] ? null : implode(',', $facets),
-            'hit_fields' => $this->hitFields === [] ? null : implode(',', $this->hitFields),
-            'remove_fields' => $this->removeFields === [] ? null : implode(',', $this->removeFields),
-        ], static fn (mixed $value): bool => $value !== null);
+            'include' => $this->include === [] ? null : implode(',', $this->include),
+        ];
+
+        foreach ($this->facets as $field => $values) {
+            $parameters[$field] = $values;
+        }
+
+        return array_filter($parameters, static fn (mixed $value): bool => $value !== null);
     }
 }

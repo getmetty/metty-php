@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Metty\Client\Search;
 
+use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Http\Transport;
 
 /**
- * Čítacia časť Metty API — verejná, autentifikovaná `api_key`.
+ * Čítacia časť Metty API — verejná, autentifikovaná kľúčom `pk_…`.
  */
 final class SearchApi
 {
+    public const MAX_SUGGEST_LIMIT = 20;
+
     public function __construct(
         private readonly Transport $transport,
     ) {}
@@ -23,57 +26,33 @@ final class SearchApi
     }
 
     /**
-     * Prejde všetky stránky výsledkov; server ranguje najviac 200 objektov.
+     * Prejde výsledky po stránkach až po okno, ktoré server ranguje (200 výsledkov).
      *
-     * @return \Generator<int, Hit>
+     * Stránkuje po maxime, aby sa okno vyčerpalo celé — pri menšej stránke by posledné výsledky
+     * padli za hranicu a ticho vypadli.
+     *
+     * @return \Generator<int, Product>
      */
     public function searchAll(SearchQuery $query): \Generator
     {
         $page = 1;
 
         do {
-            $response = $this->search((clone $query)->page($page));
-            foreach ($response->hits as $hit) {
-                yield $hit;
+            $response = $this->search((clone $query)->perPage(SearchQuery::MAX_PER_PAGE)->page($page));
+            foreach ($response->products as $product) {
+                yield $product;
             }
 
-            $page = $response->nextPage;
-        } while ($page !== null);
+            $page++;
+        } while ($response->hasNextPage());
     }
 
-    /**
-     * @return list<Hit>
-     */
-    public function autocomplete(string $query): array
+    public function suggest(string $query, int $limit = 8): SuggestResponse
     {
-        $response = $this->transport->get('/autocomplete/v2', ['q' => $query]);
-
-        $hits = [];
-        foreach ($response['hits'] ?? [] as $hit) {
-            if (is_array($hit)) {
-                $hits[] = Hit::fromArray($hit);
-            }
+        if ($limit < 1 || $limit > self::MAX_SUGGEST_LIMIT) {
+            throw new ConfigurationException(sprintf('The suggest limit must be between 1 and %d.', self::MAX_SUGGEST_LIMIT));
         }
 
-        return $hits;
-    }
-
-    /**
-     * Našepkávanie medzi hodnotami jedného facetu, napr. značiek.
-     *
-     * @return list<array{value: string, count: int}>
-     */
-    public function facetValue(string $facet, string $query = '', int $size = 10): array
-    {
-        $response = $this->transport->get('/v1/facet_value', [
-            'facet' => $facet,
-            'q' => $query,
-            'size' => $size,
-        ]);
-
-        /** @var list<array{value: string, count: int}> $values */
-        $values = is_array($response['values'] ?? null) ? $response['values'] : [];
-
-        return $values;
+        return SuggestResponse::fromArray($this->transport->get('/suggest', ['q' => $query, 'limit' => $limit]));
     }
 }

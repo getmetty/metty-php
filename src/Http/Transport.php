@@ -12,6 +12,7 @@ use Metty\Client\Exception\TransportException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
 use Psr\Http\Message\RequestFactoryInterface;
+use Psr\Http\Message\RequestInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
@@ -20,14 +21,23 @@ use Psr\Log\NullLogger;
 /**
  * HTTP vrstva klienta: autentifikácia, opakovanie a preklad chýb.
  *
- * `Authorization` sa nikdy neloguje ani nedostane do výnimky — to isté pravidlo ako na serveri.
+ * Čítacie endpointy sa autentifikujú verejným kľúčom v query, zápisové `Authorization: Bearer sk_…`.
+ * Secret sa nikdy neloguje ani nedostane do výnimky — to isté pravidlo ako na serveri.
+ *
+ * Opakovaná hodnota v query odchádza ako `pole[]=…`; bez zátvoriek si server ponechá iba poslednú.
+ *
+ * `429` sa opakuje vždy — server požiadavku odmietol, nevykonal ju. Chybu servera alebo siete
+ * opakujeme iba pri metódach, ktoré sa dajú zopakovať bez zmeny výsledku.
  */
 final class Transport
 {
+    private const SERVER_ERROR_STATUSES = [500, 502, 503, 504];
+
     /**
-     * Opakujeme iba `429` a `5xx`; ostatné `4xx` sú chyby požiadavky a opakovanie ich neopraví.
+     * Metódy, ktoré server vykoná rovnako aj pri zopakovaní. `POST` otvára sync alebo commit
+     * a `DELETE` hlási druhýkrát `not_found` — po nejasnom výsledku by opakovanie klamalo.
      */
-    private const RETRYABLE_STATUSES = [429, 500, 502, 503, 504];
+    private const REPEATABLE_METHODS = ['GET', 'PUT', 'PATCH'];
 
     private const BASE_BACKOFF_MS = 200;
 
@@ -45,7 +55,6 @@ final class Transport
         ?RequestFactoryInterface $requestFactory = null,
         ?StreamFactoryInterface $streamFactory = null,
         ?LoggerInterface $logger = null,
-        /** Uspávanie medzi pokusmi; testy ho nahradia, aby nečakali. */
         private readonly ?\Closure $sleeper = null,
     ) {
         $this->httpClient = $httpClient ?? Psr18ClientDiscovery::find();
@@ -56,19 +65,17 @@ final class Transport
 
     /**
      * @param array<string, scalar|array<int, string>|null> $query
-     * @param array<string, string>                         $headers
      *
      * @return array<string, mixed>
      */
-    public function get(string $path, array $query = [], bool $authenticated = false, array $headers = []): array
+    public function get(string $path, array $query = [], bool $secret = false): array
     {
-        return $this->send('GET', $path, $query, null, $authenticated, $headers);
+        return $this->send('GET', $path, $query, null, $secret);
     }
 
     /**
      * @param array<string, scalar|array<int, string>|null> $query
-     * @param array<string, mixed>|list<mixed>              $body
-     * @param array<string, string>                         $headers
+     * @param array<string, mixed>|list<mixed>|null         $body
      *
      * @return array<string, mixed>
      */
@@ -77,8 +84,7 @@ final class Transport
         string $path,
         array $query = [],
         array|null $body = null,
-        bool $authenticated = false,
-        array $headers = [],
+        bool $secret = false,
     ): array {
         $attempt = 0;
 
@@ -86,9 +92,9 @@ final class Transport
             $attempt++;
 
             try {
-                $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $authenticated, $headers));
+                $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $secret));
             } catch (ClientExceptionInterface $exception) {
-                if ($attempt > $this->configuration->maxRetries) {
+                if (!$this->mayRepeat($method) || $attempt > $this->configuration->maxRetries) {
                     throw new TransportException('The request to Metty failed: ' . $exception->getMessage(), 0, $exception);
                 }
 
@@ -101,7 +107,7 @@ final class Transport
                 return $this->decode($response);
             }
 
-            if (in_array($status, self::RETRYABLE_STATUSES, true) && $attempt <= $this->configuration->maxRetries) {
+            if ($this->isRetryable($method, $status) && $attempt <= $this->configuration->maxRetries) {
                 $this->logger->warning('Metty request retried.', [
                     'path' => $path,
                     'status' => $status,
@@ -115,20 +121,35 @@ final class Transport
         }
     }
 
+    private function isRetryable(string $method, int $status): bool
+    {
+        if ($status === 429) {
+            return true;
+        }
+
+        return $this->mayRepeat($method) && in_array($status, self::SERVER_ERROR_STATUSES, true);
+    }
+
+    private function mayRepeat(string $method): bool
+    {
+        return in_array($method, self::REPEATABLE_METHODS, true);
+    }
+
     /**
      * @param array<string, scalar|array<int, string>|null> $query
      * @param array<string, mixed>|list<mixed>|null         $body
-     * @param array<string, string>                         $headers
      */
     private function buildRequest(
         string $method,
         string $path,
         array $query,
         array|null $body,
-        bool $authenticated,
-        array $headers,
-    ): \Psr\Http\Message\RequestInterface {
-        $query['api_key'] ??= $this->configuration->apiKey;
+        bool $secret,
+    ): RequestInterface {
+        if (!$secret) {
+            $query['key'] = $this->configuration->requirePublicKey();
+        }
+
         $uri = $this->configuration->baseUrl . $path;
         $queryString = $this->buildQueryString($query);
         if ($queryString !== '') {
@@ -137,13 +158,9 @@ final class Transport
 
         $request = $this->requestFactory->createRequest($method, $uri)
             ->withHeader('Accept', 'application/json')
-            ->withHeader('User-Agent', 'metty-php-client');
+            ->withHeader('User-Agent', 'metty-php');
 
-        foreach ($headers as $name => $value) {
-            $request = $request->withHeader($name, $value);
-        }
-
-        if ($authenticated) {
+        if ($secret) {
             $request = $request->withHeader('Authorization', 'Bearer ' . $this->configuration->requireSecretKey());
         }
 
@@ -168,9 +185,8 @@ final class Transport
             }
 
             if (is_array($value)) {
-                // Facetové filtre chodia ako `f[]=…` a poradie musí zostať zachované.
                 foreach ($value as $item) {
-                    $parts[] = rawurlencode($name . '[]') . '=' . rawurlencode((string) $item);
+                    $parts[] = rawurlencode($name . '[]') . '=' . rawurlencode($item);
                 }
 
                 continue;
@@ -203,20 +219,16 @@ final class Transport
 
     private function apiException(ResponseInterface $response, int $status): ApiException
     {
-        $payload = [];
-
         try {
             $payload = $this->decode($response);
         } catch (TransportException) {
-            // Chybová odpoveď bez JSON tela: zostane len stavový kód.
+            $payload = [];
         }
-
-        $error = is_array($payload['error'] ?? null) ? $payload['error'] : [];
 
         return new ApiException(
             $status,
-            (string) ($error['code'] ?? 'http_error'),
-            (string) ($error['message'] ?? 'The Metty API returned an error.'),
+            is_string($payload['error'] ?? null) ? $payload['error'] : 'http_error',
+            is_string($payload['message'] ?? null) ? $payload['message'] : 'The Metty API returned an error.',
         );
     }
 
@@ -224,7 +236,6 @@ final class Transport
     {
         $milliseconds = $retryAfter !== null && is_numeric($retryAfter)
             ? (int) ((float) $retryAfter * 1000)
-            // Exponenciálny backoff s jitterom, aby sa opakovania viacerých procesov nezrazili.
             : self::BASE_BACKOFF_MS * (2 ** ($attempt - 1)) + random_int(0, self::BASE_BACKOFF_MS);
 
         if ($this->sleeper !== null) {

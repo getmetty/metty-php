@@ -19,13 +19,16 @@ trait FakeHttpTrait
 
     private Psr17Factory $psr17;
 
-    private function client(int $batchSize = Configuration::MAX_BATCH_SIZE, int $maxRetries = 0, ?string $secretKey = 'msk_secret'): MettyClient
-    {
+    private function client(
+        ?string $publicKey = 'pk_public',
+        ?string $secretKey = 'sk_secret',
+        int $maxRetries = 0,
+    ): MettyClient {
         $this->psr17 = new Psr17Factory();
         $this->httpClient = new MockClient($this->psr17);
 
         return new MettyClient(
-            new Configuration('https://api.metty.eu', 'public-key', $secretKey, $batchSize, $maxRetries),
+            new Configuration('https://api.metty.eu', $publicKey, $secretKey, $maxRetries),
             $this->httpClient,
             $this->psr17,
             $this->psr17,

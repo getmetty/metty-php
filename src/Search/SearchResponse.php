@@ -6,20 +6,31 @@ namespace Metty\Client\Search;
 
 /**
  * Odpoveď `GET /search`.
+ *
+ * `categories`, `facets`, `priceRange` a `suggestions` sú naplnené iba vtedy, keď si ich dotaz
+ * vyžiadal cez `withSections()`.
  */
 final class SearchResponse
 {
     /**
-     * @param list<Hit>                                        $hits
-     * @param array<string, list<array{value: string, count: int}>> $facets
+     * @param list<Product>                                                                  $products
+     * @param list<array{name: string, path: string, count: int}>                            $categories
+     * @param list<array{field: string, label: string, values: list<array{value: string, count: int}>}> $facets
+     * @param array{min: float, max: float}|null                                             $priceRange
+     * @param list<array{query: string, count: int}>                                         $suggestions
      */
     public function __construct(
-        public readonly array $hits,
-        public readonly int $totalHits,
-        public readonly int $offset,
-        public readonly ?int $nextPage,
+        public readonly string $query,
+        public readonly ?string $correctedQuery,
+        public readonly int $total,
+        public readonly int $page,
+        public readonly int $perPage,
+        public readonly int $pages,
+        public readonly array $products = [],
+        public readonly array $categories = [],
         public readonly array $facets = [],
-        public readonly ?string $correctedQuery = null,
+        public readonly ?array $priceRange = null,
+        public readonly array $suggestions = [],
     ) {}
 
     /**
@@ -27,30 +38,48 @@ final class SearchResponse
      */
     public static function fromArray(array $payload): self
     {
-        $results = is_array($payload['results'] ?? null) ? $payload['results'] : [];
-
-        $hits = [];
-        foreach ($results['hits'] ?? [] as $hit) {
-            if (is_array($hit)) {
-                $hits[] = Hit::fromArray($hit);
+        $products = [];
+        foreach (is_array($payload['products'] ?? null) ? $payload['products'] : [] as $product) {
+            if (is_array($product)) {
+                $products[] = Product::fromArray($product);
             }
         }
 
-        /** @var array<string, list<array{value: string, count: int}>> $facets */
-        $facets = is_array($results['facets'] ?? null) ? $results['facets'] : [];
+        /** @var list<array{name: string, path: string, count: int}> $categories */
+        $categories = is_array($payload['categories'] ?? null) ? array_values($payload['categories']) : [];
+
+        /** @var list<array{field: string, label: string, values: list<array{value: string, count: int}>}> $facets */
+        $facets = is_array($payload['facets'] ?? null) ? array_values($payload['facets']) : [];
+
+        $range = is_array($payload['price_range'] ?? null) ? $payload['price_range'] : null;
+        $priceRange = $range === null ? null : [
+            'min' => (float) ($range['min'] ?? 0),
+            'max' => (float) ($range['max'] ?? 0),
+        ];
+
+        /** @var list<array{query: string, count: int}> $suggestions */
+        $suggestions = is_array($payload['suggestions'] ?? null) ? array_values($payload['suggestions']) : [];
 
         return new self(
-            $hits,
-            (int) ($results['total_hits'] ?? 0),
-            (int) ($payload['offset'] ?? 0),
-            isset($payload['next_page']) ? (int) $payload['next_page'] : null,
+            (string) ($payload['query'] ?? ''),
+            is_string($payload['corrected_query'] ?? null) ? $payload['corrected_query'] : null,
+            (int) ($payload['total'] ?? 0),
+            (int) ($payload['page'] ?? 1),
+            (int) ($payload['per_page'] ?? 0),
+            (int) ($payload['pages'] ?? 0),
+            $products,
+            $categories,
             $facets,
-            isset($results['corrected_query']) ? (string) $results['corrected_query'] : null,
+            $priceRange,
+            $suggestions,
         );
     }
 
+    /**
+     * Ďalšia stránka existuje iba v okne, ktoré server ranguje — za ním by request skončil `422`.
+     */
     public function hasNextPage(): bool
     {
-        return $this->nextPage !== null;
+        return $this->page < $this->pages && ($this->page + 1) * $this->perPage <= SearchQuery::MAX_WINDOW;
     }
 }

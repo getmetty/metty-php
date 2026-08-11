@@ -9,40 +9,39 @@ use Metty\Client\Exception\ConfigurationException;
 /**
  * Nastavenie klienta.
  *
- * `apiKey` je verejný identifikátor katalógu a stačí na čítanie. `secretKey` je privátny kľúč pre
- * zápisy a nikdy nesmie ísť do frontendu ani do logu.
+ * `publicKey` (`pk_…`) je verejný kľúč pre čítanie a chodí v query, `secretKey` (`sk_…`) je privátny
+ * kľúč pre zápisy katalógu a nikdy nesmie ísť do frontendu ani do logu. Prefix kľúča sa kontroluje
+ * hneď, aby sa secret nedal omylom poslať v URL.
  */
 final class Configuration
 {
-    /**
-     * Server prijme najviac 100 objektov na dávku; klient väčší katalóg rozdelí sám.
-     */
-    public const MAX_BATCH_SIZE = 100;
+    public const PUBLIC_KEY_PREFIX = 'pk_';
+
+    public const SECRET_KEY_PREFIX = 'sk_';
 
     public readonly string $baseUrl;
 
-    /** @var int<1, 100> */
-    public readonly int $batchSize;
-
     public function __construct(
         string $baseUrl,
-        public readonly string $apiKey,
+        public readonly ?string $publicKey = null,
         public readonly ?string $secretKey = null,
-        int $batchSize = self::MAX_BATCH_SIZE,
         public readonly int $maxRetries = 3,
-        public readonly float $timeoutSeconds = 30.0,
     ) {
         $baseUrl = rtrim(trim($baseUrl), '/');
         if ($baseUrl === '' || filter_var($baseUrl, FILTER_VALIDATE_URL) === false) {
             throw new ConfigurationException('The base URL must be an absolute URL.');
         }
 
-        if ($apiKey === '') {
-            throw new ConfigurationException('The api key must not be empty.');
+        if ($publicKey === null && $secretKey === null) {
+            throw new ConfigurationException('The client needs at least a public key for reads or a secret key for writes.');
         }
 
-        if ($batchSize < 1 || $batchSize > self::MAX_BATCH_SIZE) {
-            throw new ConfigurationException(sprintf('The batch size must be between 1 and %d.', self::MAX_BATCH_SIZE));
+        if ($publicKey !== null && !str_starts_with($publicKey, self::PUBLIC_KEY_PREFIX)) {
+            throw new ConfigurationException('The public key must start with "pk_".');
+        }
+
+        if ($secretKey !== null && !str_starts_with($secretKey, self::SECRET_KEY_PREFIX)) {
+            throw new ConfigurationException('The secret key must start with "sk_".');
         }
 
         if ($maxRetries < 0) {
@@ -50,11 +49,22 @@ final class Configuration
         }
 
         $this->baseUrl = $baseUrl;
-        $this->batchSize = $batchSize;
     }
 
     /**
-     * @throws ConfigurationException keď je klient nastavený len na čítanie
+     * @throws ConfigurationException keď klient nemá verejný kľúč
+     */
+    public function requirePublicKey(): string
+    {
+        if ($this->publicKey === null || $this->publicKey === '') {
+            throw new ConfigurationException('Reading requires a public key; the client is configured for writes only.');
+        }
+
+        return $this->publicKey;
+    }
+
+    /**
+     * @throws ConfigurationException keď klient nemá secret kľúč
      */
     public function requireSecretKey(): string
     {
