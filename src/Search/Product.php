@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Metty\Client\Search;
 
 /**
- * Produkt vo výsledkoch hľadania.
+ * A product in the search results.
  *
- * `highlight` obsahuje polia so zhodou aj so značkami `[]` tak, ako ich vrátil server — klient
- * zvýraznenie nedohaduje. Skrátený produkt z `GET /suggest` nesie iba `id`, `name`, `url`, `image`,
- * `price` a `currency`.
+ * `highlight` holds the matched fields including the `[]` markers exactly as the server returned
+ * them; the client never guesses highlighting. The compact product from `GET /suggest` carries only
+ * `id`, `name`, `url`, `image`, `price` and `currency`.
  */
 final class Product
 {

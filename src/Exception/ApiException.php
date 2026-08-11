@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Metty\Client\Exception;
 
 /**
- * Chyba vrátená serverom v tvare `{"error": {"code": …, "message": …}}`.
+ * An error returned by the server as `{"error": …, "message": …}`.
  *
- * Výnimka zámerne nenesie hlavičky requestu — `Authorization` sa nesmie dostať do logu ani do
- * `__toString()`.
+ * The exception deliberately carries no request headers: `Authorization` must reach neither the
+ * log nor `__toString()`.
  */
 final class ApiException extends \RuntimeException implements MettyException
 {

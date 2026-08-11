@@ -116,7 +116,7 @@ final class SearchApiTest extends TestCase
         }
 
         self::assertSame(['a', 'b'], $ids);
-        self::assertCount(2, $this->sentRequests(), 'Menšia stránka by nechala koniec okna nedostupný.');
+        self::assertCount(2, $this->sentRequests(), 'A smaller page would leave the end of the window unreachable.');
         self::assertStringContainsString('per_page=100', (string) $this->sentRequests()[0]->getUri());
     }
 

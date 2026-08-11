@@ -7,10 +7,11 @@ namespace Metty\Client\Exception;
 use Metty\Client\Catalog\WriteResult;
 
 /**
- * Full sync sa nedokončil celý, takže sa nesmie commitnúť — commit by zmazal produkty, ktoré sa
- * práve nepodarilo nahrať.
+ * A full sync did not complete, so it must not be committed: the commit would delete exactly the
+ * products that just failed to upload.
  *
- * Sync ostáva otvorený: chybné produkty sa dajú dopísať pod tým istým `syncId` a commitnúť neskôr.
+ * The sync stays open, so the failed products can be resent under the same `syncId` and committed
+ * later.
  */
 final class SyncIncompleteException extends \RuntimeException implements MettyException
 {

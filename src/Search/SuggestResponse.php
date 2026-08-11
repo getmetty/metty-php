@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Metty\Client\Search;
 
 /**
- * Odpoveď `GET /suggest` — našepkávané frázy a najviac päť skrátených produktov.
+ * The `GET /suggest` response: suggested phrases and at most five compact products.
  */
 final class SuggestResponse
 {

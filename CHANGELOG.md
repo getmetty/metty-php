@@ -1,23 +1,24 @@
 # Changelog
 
-Formát podľa [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), verzovanie podľa
-[SemVer](https://semver.org/lang/sk/).
+Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
+[SemVer](https://semver.org/).
 
 ## [1.0.0] — 2026-08-11
 
-Prvé verejné vydanie.
+First public release.
 
-### Pridané
+### Added
 
-- `Search\SearchApi` — `search()`, `suggest()` a `searchAll()` nad `GET /search` a `GET /suggest`.
+- `Search\SearchApi` — `search()`, `suggest()` and `searchAll()` over `GET /search` and
+  `GET /suggest`.
 - `Catalog\CatalogApi` — `replace()`, `patch()`, `delete()`, `beginSync()`, `commit()`,
-  `synchronize()` a `export()` nad `/catalog/*`.
-- Dávkovanie po 100 produktoch, výsledok každého produktu zvlášť vo `WriteResult`.
-- Poistka pri full syncu: neúplný alebo prázdny snapshot sa necommitne, klient vyhodí
-  `SyncIncompleteException` s otvoreným `syncId`.
-- Opakovanie `429` podľa `Retry-After` a chýb servera len pri metódach, ktoré sa dajú bezpečne
-  zopakovať.
-- Kontrola hraníc servera na strane klienta — okno 200 výsledkov, veľkosť stránky, radenie, sekcie
-  a prefixy kľúčov.
+  `synchronize()` and `export()` over `/catalog/*`.
+- Batching by 100 products, with the result of every product reported separately in `WriteResult`.
+- Full sync safeguard: an incomplete or empty snapshot is never committed; the client throws
+  `SyncIncompleteException` with the sync left open.
+- Retries for `429` honouring `Retry-After`, and for server errors only on methods that are safe
+  to repeat.
+- Client-side enforcement of server boundaries — the 200 result window, page size, sorting,
+  sections and key prefixes.
 
 [1.0.0]: https://github.com/getmetty/metty-php/releases/tag/v1.0.0

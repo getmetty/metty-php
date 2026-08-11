@@ -2,65 +2,65 @@
 
 [![Packagist](https://img.shields.io/packagist/v/getmetty/metty-php.svg)](https://packagist.org/packages/getmetty/metty-php)
 [![PHP](https://img.shields.io/packagist/dependency-v/getmetty/metty-php/php.svg)](https://packagist.org/packages/getmetty/metty-php)
-[![Licencia](https://img.shields.io/packagist/l/getmetty/metty-php.svg)](LICENSE)
+[![License](https://img.shields.io/packagist/l/getmetty/metty-php.svg)](LICENSE)
 
-PHP klient pre Metty API — synchronizácia katalógu a vyhľadávanie.
+PHP client for the Metty API — catalog synchronisation and search.
 
-Bez frameworkovej závislosti: HTTP ide cez PSR-18 klienta a PSR-17 factory, ktoré si dodá integrátor
-(alebo sa nájdu cez `php-http/discovery`). Logovanie je voliteľné cez PSR-3.
+No framework dependency: HTTP goes through a PSR-18 client and PSR-17 factories that you provide
+(or that are discovered through `php-http/discovery`). Logging is optional through PSR-3.
 
-Dokumentácia: **[docs.metty.eu/klient/php](https://docs.metty.eu/klient/php)** — klient,
-[Search API](https://docs.metty.eu/api/hladanie), [Catalog API](https://docs.metty.eu/api/zapis)
-a [chybové kódy](https://docs.metty.eu/api/chyby).
+Documentation: **[docs.metty.eu/client/php](https://docs.metty.eu/client/php)** — the client,
+[Search API](https://docs.metty.eu/api/search), [Catalog API](https://docs.metty.eu/api/catalog)
+and [error codes](https://docs.metty.eu/api/errors).
 
-## Inštalácia
+## Installation
 
 ```bash
 composer require getmetty/metty-php
 ```
 
-Ak v projekte ešte nemáte PSR-18 klienta, doinštalujte si ľubovoľnú implementáciu, napr.:
+If your project does not have a PSR-18 client yet, install any implementation, for example:
 
 ```bash
 composer require symfony/http-client nyholm/psr7
 ```
 
-## Kľúče
+## Keys
 
 ```php
 use Metty\Client\MettyClient;
 
 $client = MettyClient::create(
-    publicKey: 'pk_…',   // čítanie; patrí aj do frontendu
-    secretKey: 'sk_…',   // zápisy katalógu; nikdy nesmie ísť do frontendu
+    publicKey: '<PUBLIC_API_KEY>',   // reads; safe to expose in a frontend
+    secretKey: '<SECRET_API_KEY>',   // catalog writes; must never reach a frontend
 );
 ```
 
-Stačí ten kľúč, ktorý naozaj potrebujete — klient s `pk_` vie iba čítať, klient s `sk_` iba zapisovať.
-Prehodené kľúče klient odmietne hneď pri vytvorení, aby secret neskončil v URL.
+Pass only the key you actually need — a client with `pk_` can only read, a client with `sk_` can
+only write. Swapped keys are rejected at construction time so that a secret never ends up in a URL.
 
-Search API (`search.api.metty.eu`) a Catalog API (`catalog.api.metty.eu`) sú predvolené, adresy sa
-prepisujú len pre staging alebo lokálny vývoj:
+The Search API (`search.api.metty.eu`) and the Catalog API (`catalog.api.metty.eu`) are the
+defaults; override the addresses only for staging or local development:
 
 ```php
-$client = MettyClient::create('pk_…', 'sk_…',
+$client = MettyClient::create('<PUBLIC_API_KEY>', '<SECRET_API_KEY>',
     searchUrl: 'https://search.api.metty.click',
     catalogUrl: 'https://catalog.api.metty.click',
 );
 ```
 
-## Vyhľadávanie
+## Search
 
 ```php
 use Metty\Client\Search\SearchQuery;
 
 $response = $client->search()->search(
-    SearchQuery::for('vŕtačka')
-        ->facet('brand', 'Bosch')         // AND medzi poľami, OR medzi hodnotami jedného poľa
-        ->facet('brand', 'Makita')
-        ->category('Náradie > Vŕtačky')
+    SearchQuery::for('drill')
+        ->facet('colour', 'blue')          // AND across fields, OR within one field
+        ->facet('colour', 'black')
+        ->category('Tools > Drills')
         ->priceRange(100, 200)
-        ->sortBy('price_asc')             // relevance | price_asc | price_desc | name_asc
+        ->sortBy('price_asc')              // relevance | price_asc | price_desc | name_asc
         ->withSections('facets', 'categories', 'suggestions')
         ->perPage(24)
         ->page(2),
@@ -70,46 +70,48 @@ foreach ($response->products as $product) {
     echo $product->id, ' ', $product->name, ' ', $product->url, PHP_EOL;
 }
 
-echo $response->total, ' výsledkov na ', $response->pages, ' stránkach';
+echo $response->total, ' results across ', $response->pages, ' pages';
 ```
 
-- `facet()` berie ľubovoľné facetové pole z feedu, `category()` cestu v tom istom tvare, aký vracia
-  `category` produktu.
-- `highlight` prichádza zo servera aj so značkami `[]`; klient zvýraznenie nedohaduje.
-- `categories`, `facets`, `priceRange` a `suggestions` sú naplnené iba pri `withSections()`.
-- Prázdny dotaz (`SearchQuery::for()`) je listing katalógu podľa filtrov.
+- `facet()` takes any facet field from your catalog, `category()` a path in the same format the
+  product's `category` is returned in.
+- `highlight` arrives from the server with `[]` markers already in place; the client never guesses
+  highlighting on its own.
+- `categories`, `facets`, `priceRange` and `suggestions` are only populated when requested through
+  `withSections()`.
+- An empty query (`SearchQuery::for()`) lists the catalog according to the filters.
 
-Server ranguje prvých 200 výsledkov a hlbšie stránkovanie odmieta. Klient tú hranicu pozná:
-`hasNextPage()` ju rešpektuje, `searchAll()` na nej skončí a dotaz mimo okna zlyhá ešte pred
-requestom.
+The server ranks the first 200 results and rejects deeper paging. The client knows that boundary:
+`hasNextPage()` respects it, `searchAll()` stops there, and a query outside the window fails before
+the request is sent.
 
 ```php
-foreach ($client->search()->searchAll(SearchQuery::for('vŕtačka')) as $product) {
+foreach ($client->search()->searchAll(SearchQuery::for('drill')) as $product) {
     echo $product->name, PHP_EOL;
 }
 ```
 
-`searchAll()` si veľkosť stránky určuje sám, aby okno vyčerpal celé.
+`searchAll()` picks its own page size so that it consumes the whole window.
 
-Našepkávanie:
+Autocomplete:
 
 ```php
-$suggest = $client->search()->suggest('vŕta', limit: 8);
+$suggest = $client->search()->suggest('dri', limit: 8);
 
-$suggest->suggestions;  // [['query' => 'vŕtačka', 'count' => 41], …]
-$suggest->products;     // najviac 5 skrátených produktov
+$suggest->suggestions;  // [['query' => 'drill', 'count' => 41], …]
+$suggest->products;     // at most 5 compact products
 ```
 
-## Zápis katalógu
+## Writing the catalog
 
 ```php
 use Metty\Client\Catalog\CatalogProduct;
 
 $result = $client->catalog()->replace([
-    CatalogProduct::create('sku-1', 'Príklepová vŕtačka', 'https://eshop.sk/vrtacka',
-        price: 129.9, inStock: true, brand: 'Bosch', category: 'Náradie > Vŕtačky',
-        params: ['farba' => 'modrá', 'príkon' => '800 W']),
-    CatalogProduct::create('sku-2', 'Uhlová brúska', 'https://eshop.sk/bruska', price: 89.5),
+    CatalogProduct::create('sku-1', 'Impact drill', 'https://shop.example/drill',
+        price: 129.9, inStock: true, brand: 'Bosch', category: 'Tools > Drills',
+        params: ['colour' => 'blue', 'power' => '800 W']),
+    CatalogProduct::create('sku-2', 'Angle grinder', 'https://shop.example/grinder', price: 89.5),
 ]);
 
 if ($result->hasFailures()) {
@@ -119,11 +121,11 @@ if ($result->hasFailures()) {
 }
 ```
 
-`replace()` je úplné nahradenie — neuvedené pole sa na serveri zmaže. `patch()` mení iba uvedené
-polia a `delete(['sku-1'])` produkty odstráni.
+`replace()` is a full replacement — a field you omit is cleared on the server. `patch()` changes
+only the fields you send and `delete(['sku-1'])` removes products.
 
-Pri `patch()` je rozdiel medzi vynechaným poľom a poľom s hodnotou `null`; vymazanie sa preto
-zapisuje priamo:
+With `patch()` an omitted field differs from a field set to `null`, so clearing a value is written
+explicitly:
 
 ```php
 $client->catalog()->patch([
@@ -131,21 +133,22 @@ $client->catalog()->patch([
 ]);
 ```
 
-`params` sú jediný zdroj facetovateľných atribútov — to isté miesto, kam chodia facety z XML feedu.
+`params` is the only source of facetable attributes — the same place facets from an XML feed end up
+in.
 
-## Bezpečný full snapshot
+## Safe full snapshot
 
 ```php
 $outcome = $client->catalog()->synchronize($products);
 
 echo $outcome['sync_id'];
-echo $outcome['commit']['removed'];  // koľko starých produktov zmizlo
+echo $outcome['commit']['removed'];  // how many stale products were dropped
 ```
 
-Klient otvorí sync, nahrá pod ním celý katalóg a až potom ho commitne. Ak sa niektorý produkt
-nepodarí nahrať, sync **necommitne** — inak by commit zmazal produkty, ktoré práve neprešli — a
-vyhodí `SyncIncompleteException` s `syncId` a výsledkami dávky. Sync ostáva otvorený, takže chybné
-produkty sa dajú dopísať a commitnúť neskôr:
+The client opens a sync, uploads the whole catalog under it and only then commits. If any product
+fails to upload, the sync is **not** committed — committing would delete exactly the products that
+just failed — and a `SyncIncompleteException` carrying the `syncId` and the batch results is thrown.
+The sync stays open, so the failed products can be resent and committed later:
 
 ```php
 use Metty\Client\Exception\SyncIncompleteException;
@@ -153,13 +156,14 @@ use Metty\Client\Exception\SyncIncompleteException;
 try {
     $client->catalog()->synchronize($products);
 } catch (SyncIncompleteException $exception) {
-    $client->catalog()->replace($opravene, $exception->syncId);
+    $client->catalog()->replace($fixed, $exception->syncId);
     $client->catalog()->commit($exception->syncId);
 }
 ```
 
-Táto poistka sa nedá vypnúť — `force: true` sa týka výhradne serverovej poistky, ktorá odmietne
-snapshot pokrývajúci menej než polovicu katalógu. Prázdny snapshot klient odmietne vždy.
+This safeguard cannot be turned off. `force: true` applies solely to the server-side safeguard that
+rejects a snapshot covering less than half of the catalog. An empty snapshot is always rejected by
+the client.
 
 ## Export
 
@@ -169,36 +173,36 @@ foreach ($client->catalog()->export() as $product) {
 }
 ```
 
-## Čo klient rieši za vás
+## What the client handles for you
 
-- **dávkovanie** — katalóg sa rozdelí na dávky podľa limitu servera (100 produktov)
-- **partial failure** — dávka nespadne celá; dostanete stav každého produktu
-- **hranice servera** — neznáme radenie, sekcia, facetový názov či stránka mimo okna zlyhajú
-  lokálne, nie až ako `422`
-- **retry s backoffom** — `429` vždy (rešpektuje `Retry-After`), chyba servera alebo siete iba pri
-  metódach, ktoré sa dajú bez následkov zopakovať; ostatné `4xx` nikdy
+- **batching** — the catalog is split into batches according to the server limit of 100 products
+- **partial failure** — a batch never fails as a whole; you get the status of every product
+- **server boundaries** — an unknown sort, section, or a page outside the ranked window fails
+  locally instead of coming back as a `422`
+- **retry with backoff** — `429` always (honouring `Retry-After`), a server or network error only
+  for methods that are safe to repeat; other `4xx` never
 
-Idempotency kľúč netreba: server zapisuje podľa `id`, takže zopakovaná dávka nevytvorí duplicity.
-`Authorization` sa nikdy neloguje ani nedostane do výnimky.
+No idempotency key is needed: the server writes by `id`, so a repeated batch cannot create
+duplicates. `Authorization` is never logged and never ends up in an exception.
 
-## Chyby
+## Errors
 
-| výnimka | kedy |
+| exception | when |
 |---|---|
-| `ConfigurationException` | zlé nastavenie alebo dotaz, ktorý by server odmietol |
-| `ApiException` | server vrátil `{"error": …, "message": …}`; nesie `statusCode` a `errorCode` |
-| `SyncIncompleteException` | full sync sa nedokončil celý a nebol commitnutý |
-| `TransportException` | sieťová chyba alebo odpoveď, ktorá sa nedá spracovať |
+| `ConfigurationException` | invalid configuration, or a query the server would reject |
+| `ApiException` | the server returned `{"error": …, "message": …}`; carries `statusCode` and `errorCode` |
+| `SyncIncompleteException` | a full sync did not complete and was therefore not committed |
+| `TransportException` | a network error, or a response that cannot be parsed |
 
-Všetky implementujú `Metty\Client\Exception\MettyException`.
+All of them implement `Metty\Client\Exception\MettyException`.
 
-## Podpora
+## Support
 
-PHP 8.1+. Klient sa verzuje nezávisle od servera podľa [SemVer](https://semver.org/lang/sk/); zmeny
-sú v [CHANGELOG.md](CHANGELOG.md).
+PHP 8.1+. The client is versioned independently of the server following
+[SemVer](https://semver.org/); changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
-Otázky a chyby: [GitHub issues](https://github.com/getmetty/metty-php/issues).
+Questions and bugs: [GitHub issues](https://github.com/getmetty/metty-php/issues).
 
-## Licencia
+## License
 
 [MIT](LICENSE).

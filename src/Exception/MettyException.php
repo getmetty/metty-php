@@ -5,6 +5,6 @@ declare(strict_types=1);
 namespace Metty\Client\Exception;
 
 /**
- * Spoločný predok všetkých výnimiek klienta.
+ * Common ancestor of every exception thrown by the client.
  */
 interface MettyException extends \Throwable {}

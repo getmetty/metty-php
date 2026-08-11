@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Metty\Client\Catalog;
 
 /**
- * Výsledok jedného produktu v dávke.
+ * The result of a single product within a batch.
  */
 final class ItemResult
 {

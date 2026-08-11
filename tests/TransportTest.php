@@ -38,7 +38,7 @@ final class TransportTest extends TestCase
 
         $payload = $transport->get('/search', ['q' => 'x']);
 
-        self::assertSame([2000], $slept, 'Retry-After musí určiť dĺžku čakania.');
+        self::assertSame([2000], $slept, 'Retry-After must dictate how long the client waits.');
         self::assertSame(0, $payload['total']);
     }
 
@@ -49,14 +49,14 @@ final class TransportTest extends TestCase
 
         try {
             $client->search()->search('x');
-            self::fail('Očakávaná ApiException.');
+            self::fail('Expected an ApiException.');
         } catch (ApiException $exception) {
             self::assertSame(422, $exception->statusCode);
             self::assertSame('invalid_parameter', $exception->errorCode);
             self::assertFalse($exception->isRateLimited());
         }
 
-        self::assertCount(1, $this->sentRequests(), '4xx okrem 429 sa nesmie opakovať.');
+        self::assertCount(1, $this->sentRequests(), 'A 4xx other than 429 must never be retried.');
     }
 
     public function testServerErrorIsNotRetriedForCommit(): void
@@ -66,12 +66,12 @@ final class TransportTest extends TestCase
 
         try {
             $client->catalog()->commit('sync_abc');
-            self::fail('Očakávaná ApiException.');
+            self::fail('Expected an ApiException.');
         } catch (ApiException $exception) {
             self::assertSame(503, $exception->statusCode);
         }
 
-        self::assertCount(1, $this->sentRequests(), 'Opakovaný commit by nahlásil úspech ako konflikt.');
+        self::assertCount(1, $this->sentRequests(), 'A repeated commit would report a success as a conflict.');
     }
 
     public function testServerErrorIsRetriedForProductBatch(): void
@@ -102,7 +102,7 @@ final class TransportTest extends TestCase
 
         try {
             $client->catalog()->replace([CatalogProduct::create('a', 'A', 'https://e.sk/a')]);
-            self::fail('Očakávaná ApiException.');
+            self::fail('Expected an ApiException.');
         } catch (ApiException $exception) {
             $serialized = $exception->getMessage() . print_r($exception, true);
             self::assertStringNotContainsString('sk_secret', $serialized);
@@ -144,7 +144,7 @@ final class TransportTest extends TestCase
 
         try {
             $client->search()->search('x');
-            self::fail('Očakávaná ApiException.');
+            self::fail('Expected an ApiException.');
         } catch (ApiException $exception) {
             self::assertSame('rate_limited', $exception->errorCode);
             self::assertTrue($exception->isRateLimited());
