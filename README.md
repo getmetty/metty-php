@@ -1,5 +1,9 @@
 # Metty PHP client
 
+[![Packagist](https://img.shields.io/packagist/v/getmetty/metty-php.svg)](https://packagist.org/packages/getmetty/metty-php)
+[![PHP](https://img.shields.io/packagist/dependency-v/getmetty/metty-php/php.svg)](https://packagist.org/packages/getmetty/metty-php)
+[![Licencia](https://img.shields.io/packagist/l/getmetty/metty-php.svg)](LICENSE)
+
 PHP klient pre Metty API — synchronizácia katalógu a vyhľadávanie.
 
 Bez frameworkovej závislosti: HTTP ide cez PSR-18 klienta a PSR-17 factory, ktoré si dodá integrátor
