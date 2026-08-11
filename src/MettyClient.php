@@ -13,12 +13,12 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Log\LoggerInterface;
 
 /**
- * Vstupný bod klienta Metty API.
+ * Entry point of the Metty API client.
  *
  * ```php
  * $client = MettyClient::create('pk_…', 'sk_…');
- * $client->search()->search(SearchQuery::for('vŕtačka')->facet('brand', 'Bosch'));
- * $client->catalog()->replace([CatalogProduct::create('sku-1', 'Vŕtačka', 'https://…')]);
+ * $client->search()->search(SearchQuery::for('drill')->facet('colour', 'blue'));
+ * $client->catalog()->replace([CatalogProduct::create('sku-1', 'Drill', 'https://…')]);
  * ```
  */
 final class MettyClient

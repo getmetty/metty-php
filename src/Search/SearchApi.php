@@ -8,7 +8,7 @@ use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Http\Transport;
 
 /**
- * Čítacia časť Metty API — verejná, autentifikovaná kľúčom `pk_…`.
+ * The read side of the Metty API: public, authenticated with a `pk_…` key.
  */
 final class SearchApi
 {
@@ -26,10 +26,10 @@ final class SearchApi
     }
 
     /**
-     * Prejde výsledky po stránkach až po okno, ktoré server ranguje (200 výsledkov).
+     * Walks the results page by page up to the window the server ranks (200 results).
      *
-     * Stránkuje po maxime, aby sa okno vyčerpalo celé — pri menšej stránke by posledné výsledky
-     * padli za hranicu a ticho vypadli.
+     * It pages by the maximum size so that the window is consumed in full; with a smaller page the
+     * last results would fall past the boundary and silently disappear.
      *
      * @return \Generator<int, Product>
      */

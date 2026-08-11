@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Metty\Client\Search;
 
 /**
- * Odpoveď `GET /search`.
+ * The `GET /search` response.
  *
- * `categories`, `facets`, `priceRange` a `suggestions` sú naplnené iba vtedy, keď si ich dotaz
- * vyžiadal cez `withSections()`.
+ * `categories`, `facets`, `priceRange` and `suggestions` are populated only when the query asked
+ * for them through `withSections()`.
  */
 final class SearchResponse
 {
@@ -76,7 +76,8 @@ final class SearchResponse
     }
 
     /**
-     * Ďalšia stránka existuje iba v okne, ktoré server ranguje — za ním by request skončil `422`.
+     * A next page only exists inside the window the server ranks; beyond it the request would fail
+     * with `422`.
      */
     public function hasNextPage(): bool
     {

@@ -19,24 +19,26 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
- * HTTP vrstva klienta: autentifikácia, opakovanie a preklad chýb.
+ * The client's HTTP layer: authentication, retries and error translation.
  *
- * Search API sa autentifikuje verejným kľúčom v query, Catalog API hlavičkou `Authorization: Bearer
- * sk_…`; každé beží na vlastnom hoste, preto ten istý príznak vyberá aj adresu. Secret sa nikdy
- * neloguje ani nedostane do výnimky — to isté pravidlo ako na serveri.
+ * The Search API authenticates with the public key in the query, the Catalog API with an
+ * `Authorization: Bearer sk_…` header; each runs on its own host, so the same flag also selects the
+ * address. The secret is never logged and never ends up in an exception, the same rule as on the
+ * server.
  *
- * Opakovaná hodnota v query odchádza ako `pole[]=…`; bez zátvoriek si server ponechá iba poslednú.
+ * A repeated query value is sent as `field[]=…`; without the brackets the server keeps only the
+ * last one.
  *
- * `429` sa opakuje vždy — server požiadavku odmietol, nevykonal ju. Chybu servera alebo siete
- * opakujeme iba pri metódach, ktoré sa dajú zopakovať bez zmeny výsledku.
+ * `429` is always retried: the server rejected the request rather than performing it. A server or
+ * network error is retried only for methods that can be repeated without changing the outcome.
  */
 final class Transport
 {
     private const SERVER_ERROR_STATUSES = [500, 502, 503, 504];
 
     /**
-     * Metódy, ktoré server vykoná rovnako aj pri zopakovaní. `POST` otvára sync alebo commit
-     * a `DELETE` hlási druhýkrát `not_found` — po nejasnom výsledku by opakovanie klamalo.
+     * Methods the server performs identically when repeated. `POST` opens a sync or commits one and
+     * a second `DELETE` reports `not_found`, so retrying after an unclear outcome would lie.
      */
     private const REPEATABLE_METHODS = ['GET', 'PUT', 'PATCH'];
 

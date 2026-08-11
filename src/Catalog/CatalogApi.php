@@ -9,14 +9,14 @@ use Metty\Client\Exception\SyncIncompleteException;
 use Metty\Client\Http\Transport;
 
 /**
- * Zápisová časť Metty API — `Authorization: Bearer sk_…`.
+ * The write side of the Metty API, authenticated with `Authorization: Bearer sk_…`.
  *
- * Klient rieši za integrátora dávkovanie na limit servera a partial failure. Idempotency kľúč
- * netreba, server zapisuje podľa `id`, takže zopakovaná dávka nevytvorí duplicity.
+ * The client takes care of batching up to the server limit and of partial failures. No idempotency
+ * key is needed: the server writes by `id`, so a repeated batch cannot create duplicates.
  */
 final class CatalogApi
 {
-    /** Server prijme najviac 100 produktov na dávku; klient väčší katalóg rozdelí sám. */
+    /** The server accepts at most 100 products per batch; a larger catalog is split by the client. */
     public const MAX_BATCH_SIZE = 100;
 
     public const MAX_EXPORT_PER_PAGE = 500;
@@ -30,7 +30,7 @@ final class CatalogApi
     ) {}
 
     /**
-     * Úplné nahradenie — neuvedené pole sa na serveri zmaže.
+     * Full replacement: a field that is not listed is cleared on the server.
      *
      * @param iterable<CatalogProduct> $products
      */
@@ -40,7 +40,7 @@ final class CatalogApi
     }
 
     /**
-     * Čiastočná zmena — neuvedené pole ostáva; neexistujúci produkt je chyba, nie create.
+     * Partial change: an omitted field is kept, and a missing product is an error rather than a create.
      *
      * @param iterable<CatalogProduct> $products
      */
@@ -65,7 +65,7 @@ final class CatalogApi
     }
 
     /**
-     * Otvorí full sync; produkty zapísané pod jeho ID tvoria nový snapshot katalógu.
+     * Opens a full sync; the products written under its ID form the new catalog snapshot.
      */
     public function beginSync(): string
     {
@@ -73,10 +73,10 @@ final class CatalogApi
     }
 
     /**
-     * Uzavrie sync; produkty, ktoré počas neho neprišli, server zmaže.
+     * Closes the sync; products that did not arrive during it are deleted by the server.
      *
-     * Snapshot pokrývajúci menej než polovicu katalógu server odmietne (`generation_incomplete`) —
-     * poistka proti commitu neúplného snapshotu. `force` ju vedome prepíše.
+     * A snapshot covering less than half of the catalog is rejected (`generation_incomplete`) as a
+     * safeguard against committing an incomplete snapshot. `force` overrides it deliberately.
      *
      * @return array{sync_id: string, status: string, kept: int, removed: int}
      */
@@ -89,10 +89,10 @@ final class CatalogApi
     }
 
     /**
-     * Bezpečný full snapshot: otvorí sync, nahrá celý katalóg a až potom ho commitne.
+     * Safe full snapshot: opens a sync, uploads the whole catalog and only then commits it.
      *
-     * Snapshot čo i len s jedným zlyhaným produktom sa nikdy necommitne — `force` sa týka výhradne
-     * serverovej poistky proti malému snapshotu a odovzdáva sa až commitu.
+     * A snapshot with even one failed product is never committed. `force` applies solely to the
+     * server-side safeguard against a small snapshot and is passed on to the commit.
      *
      * @param iterable<CatalogProduct> $products
      *
@@ -119,7 +119,7 @@ final class CatalogApi
     }
 
     /**
-     * Prejde celý katalóg na serveri po stránkach.
+     * Walks the whole catalog on the server, page by page.
      *
      * @return \Generator<int, array<string, mixed>>
      */
