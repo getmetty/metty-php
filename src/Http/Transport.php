@@ -21,8 +21,9 @@ use Psr\Log\NullLogger;
 /**
  * HTTP vrstva klienta: autentifikácia, opakovanie a preklad chýb.
  *
- * Čítacie endpointy sa autentifikujú verejným kľúčom v query, zápisové `Authorization: Bearer sk_…`.
- * Secret sa nikdy neloguje ani nedostane do výnimky — to isté pravidlo ako na serveri.
+ * Search API sa autentifikuje verejným kľúčom v query, Catalog API hlavičkou `Authorization: Bearer
+ * sk_…`; každé beží na vlastnom hoste, preto ten istý príznak vyberá aj adresu. Secret sa nikdy
+ * neloguje ani nedostane do výnimky — to isté pravidlo ako na serveri.
  *
  * Opakovaná hodnota v query odchádza ako `pole[]=…`; bez zátvoriek si server ponechá iba poslednú.
  *
@@ -68,9 +69,9 @@ final class Transport
      *
      * @return array<string, mixed>
      */
-    public function get(string $path, array $query = [], bool $secret = false): array
+    public function get(string $path, array $query = [], bool $catalog = false): array
     {
-        return $this->send('GET', $path, $query, null, $secret);
+        return $this->send('GET', $path, $query, null, $catalog);
     }
 
     /**
@@ -84,7 +85,7 @@ final class Transport
         string $path,
         array $query = [],
         array|null $body = null,
-        bool $secret = false,
+        bool $catalog = false,
     ): array {
         $attempt = 0;
 
@@ -92,7 +93,7 @@ final class Transport
             $attempt++;
 
             try {
-                $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $secret));
+                $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $catalog));
             } catch (ClientExceptionInterface $exception) {
                 if (!$this->mayRepeat($method) || $attempt > $this->configuration->maxRetries) {
                     throw new TransportException('The request to Metty failed: ' . $exception->getMessage(), 0, $exception);
@@ -144,13 +145,13 @@ final class Transport
         string $path,
         array $query,
         array|null $body,
-        bool $secret,
+        bool $catalog,
     ): RequestInterface {
-        if (!$secret) {
+        if (!$catalog) {
             $query['key'] = $this->configuration->requirePublicKey();
         }
 
-        $uri = $this->configuration->baseUrl . $path;
+        $uri = $this->configuration->baseUrl($catalog) . $path;
         $queryString = $this->buildQueryString($query);
         if ($queryString !== '') {
             $uri .= '?' . $queryString;
@@ -160,7 +161,7 @@ final class Transport
             ->withHeader('Accept', 'application/json')
             ->withHeader('User-Agent', 'metty-php');
 
-        if ($secret) {
+        if ($catalog) {
             $request = $request->withHeader('Authorization', 'Bearer ' . $this->configuration->requireSecretKey());
         }
 
@@ -225,9 +226,15 @@ final class Transport
             $payload = [];
         }
 
+        $error = $payload['error'] ?? null;
+        if (is_array($error)) {
+            $payload = $error;
+            $error = $error['code'] ?? null;
+        }
+
         return new ApiException(
             $status,
-            is_string($payload['error'] ?? null) ? $payload['error'] : 'http_error',
+            is_string($error) ? $error : 'http_error',
             is_string($payload['message'] ?? null) ? $payload['message'] : 'The Metty API returned an error.',
         );
     }
