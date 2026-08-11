@@ -11,7 +11,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use Psr\Http\Message\RequestInterface;
 
 /**
- * Fake PSR-18 klient a odchytené requesty — testy nesmú siahať na sieť.
+ * A fake PSR-18 client with captured requests: the tests must never touch the network.
  */
 trait FakeHttpTrait
 {

@@ -146,13 +146,13 @@ final class CatalogApiTest extends TestCase
                 CatalogProduct::create('a', 'A', 'https://e.sk/a'),
                 CatalogProduct::create('b', 'B', 'https://e.sk/b'),
             ]);
-            self::fail('Očakávaná SyncIncompleteException.');
+            self::fail('Expected a SyncIncompleteException.');
         } catch (SyncIncompleteException $exception) {
             self::assertSame('sync_abc', $exception->syncId);
             self::assertSame('invalid_price', $exception->result->failures()[0]->error);
         }
 
-        self::assertCount(2, $this->sentRequests(), 'Commit sa nesmie odoslať.');
+        self::assertCount(2, $this->sentRequests(), 'The commit must not be sent.');
     }
 
     public function testForceDoesNotCommitASnapshotWithFailedProducts(): void

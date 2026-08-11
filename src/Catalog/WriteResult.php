@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace Metty\Client\Catalog;
 
 /**
- * Výsledok celého zápisu — aj keď sa rozpadol na viac dávok.
+ * The result of a whole write, even when it was split across several batches.
  *
- * Dávka nikdy nepadá celá, preto klient vracia stav každého produktu, nie jednu výnimku.
+ * A batch never fails as a whole, so the client reports the status of every product instead of
+ * throwing a single exception.
  */
 final class WriteResult implements \Countable
 {

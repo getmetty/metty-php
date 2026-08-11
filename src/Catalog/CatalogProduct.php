@@ -7,11 +7,11 @@ namespace Metty\Client\Catalog;
 use Metty\Client\Exception\ConfigurationException;
 
 /**
- * Produkt tak, ako ho prijíma `/catalog/products`.
+ * A product in the shape `/catalog/products` accepts.
  *
- * `create()` pokrýva bežný zápis a nevyplnené polia vynechá. Pri `PATCH` je rozdiel medzi
- * vynechaným poľom (ostáva) a poľom s hodnotou `null` (vymaže sa), preto sa taká zmena zapisuje
- * priamo cez konštruktor: `new CatalogProduct('sku-1', ['brand' => null])`.
+ * `create()` covers the ordinary write and drops fields that were not filled in. With `PATCH` an
+ * omitted field (kept) differs from a field set to `null` (cleared), so such a change is written
+ * through the constructor: `new CatalogProduct('sku-1', ['brand' => null])`.
  */
 final class CatalogProduct implements \JsonSerializable
 {
@@ -39,7 +39,7 @@ final class CatalogProduct implements \JsonSerializable
     }
 
     /**
-     * @param array<string, scalar> $params facetovateľné atribúty, napr. `['farba' => 'modrá']`
+     * @param array<string, scalar> $params facetable attributes, for example `['colour' => 'blue']`
      */
     public static function create(
         string $id,

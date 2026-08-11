@@ -9,12 +9,12 @@ use Metty\Client\Exception\ConfigurationException;
 /**
  * Nastavenie klienta.
  *
- * `publicKey` (`pk_…`) je verejný kľúč pre čítanie a chodí v query, `secretKey` (`sk_…`) je privátny
- * kľúč pre zápisy katalógu a nikdy nesmie ísť do frontendu ani do logu. Prefix kľúča sa kontroluje
- * hneď, aby sa secret nedal omylom poslať v URL.
+ * `publicKey` (`pk_…`) is the read key sent in the query, `secretKey` (`sk_…`) is the private key
+ * for catalog writes that must never reach a frontend or a log. The key prefix is validated up
+ * front so that a secret cannot end up in a URL by accident.
  *
- * Search a Catalog API bežia na samostatných hostoch; adresy sa prepisujú iba pre staging alebo
- * lokálny vývoj.
+ * The Search and Catalog APIs run on separate hosts; the addresses are only overridden for staging
+ * or local development.
  */
 final class Configuration
 {
@@ -58,7 +58,7 @@ final class Configuration
     }
 
     /**
-     * Adresa API podľa toho, či ide o zápisové volanie katalógu.
+     * The API address, chosen by whether this is a catalog write.
      */
     public function baseUrl(bool $catalog): string
     {
@@ -66,7 +66,7 @@ final class Configuration
     }
 
     /**
-     * @throws ConfigurationException keď klient nemá verejný kľúč
+     * @throws ConfigurationException when the client has no public key
      */
     public function requirePublicKey(): string
     {
@@ -78,7 +78,7 @@ final class Configuration
     }
 
     /**
-     * @throws ConfigurationException keď klient nemá secret kľúč
+     * @throws ConfigurationException when the client has no secret key
      */
     public function requireSecretKey(): string
     {

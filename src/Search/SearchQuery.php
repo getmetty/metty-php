@@ -7,15 +7,16 @@ namespace Metty\Client\Search;
 use Metty\Client\Exception\ConfigurationException;
 
 /**
- * Stavač parametrov `GET /search`.
+ * Builder for the `GET /search` parameters.
  *
- * Facety sú bežné polia z feedu: `facet('Farba', 'biela')` je AND medzi poľami a OR medzi hodnotami
- * jedného poľa. Hranice servera (`per_page`, okno 200 výsledkov, zoznam radení) sa kontrolujú tu,
- * aby chyba prišla pred requestom, nie ako `422` zo servera.
+ * Facets are ordinary fields from the catalog: `facet('colour', 'white')` means AND across fields
+ * and OR within the values of one field. Server boundaries (`per_page`, the 200 result window, the
+ * list of sorts) are checked here so that the error arrives before the request instead of as a
+ * `422` from the server.
  */
 final class SearchQuery
 {
-    /** Stránkovanie končí na prvých 200 výsledkoch; hlbšie sa už neranguje. */
+    /** Paging ends at the first 200 results; nothing deeper is ranked. */
     public const MAX_WINDOW = 200;
 
     public const MAX_PER_PAGE = 100;
@@ -55,7 +56,7 @@ final class SearchQuery
     }
 
     /**
-     * Cesta kategórie v tvare, v akom ju vracia `category` produktu, napr. `Náradie > Vŕtačky`.
+     * A category path in the shape the product's `category` is returned in, e.g. `Tools > Drills`.
      */
     public function category(string $path): self
     {
