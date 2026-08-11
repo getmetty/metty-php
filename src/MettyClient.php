@@ -16,7 +16,7 @@ use Psr\Log\LoggerInterface;
  * Vstupný bod klienta Metty API.
  *
  * ```php
- * $client = MettyClient::create('https://api.metty.eu', 'pk_…', 'sk_…');
+ * $client = MettyClient::create('pk_…', 'sk_…');
  * $client->search()->search(SearchQuery::for('vŕtačka')->facet('brand', 'Bosch'));
  * $client->catalog()->replace([CatalogProduct::create('sku-1', 'Vŕtačka', 'https://…')]);
  * ```
@@ -39,9 +39,13 @@ final class MettyClient
         $this->search = new SearchApi($transport);
     }
 
-    public static function create(string $baseUrl, ?string $publicKey = null, ?string $secretKey = null): self
-    {
-        return new self(new Configuration($baseUrl, $publicKey, $secretKey));
+    public static function create(
+        ?string $publicKey = null,
+        ?string $secretKey = null,
+        ?string $searchUrl = null,
+        ?string $catalogUrl = null,
+    ): self {
+        return new self(new Configuration($publicKey, $secretKey, $searchUrl, $catalogUrl));
     }
 
     public function catalog(): CatalogApi

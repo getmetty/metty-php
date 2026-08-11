@@ -23,7 +23,7 @@ final class TransportTest extends TestCase
         $httpClient = new MockClient($psr17);
         $slept = [];
         $transport = new Transport(
-            new Configuration('https://api.metty.eu', 'pk_public', 'sk_secret', 2),
+            new Configuration('pk_public', 'sk_secret', maxRetries: 2),
             $httpClient,
             $psr17,
             $psr17,
@@ -79,7 +79,7 @@ final class TransportTest extends TestCase
         $psr17 = new Psr17Factory();
         $httpClient = new MockClient($psr17);
         $transport = new Transport(
-            new Configuration('https://api.metty.eu', 'pk_public', 'sk_secret', 1),
+            new Configuration('pk_public', 'sk_secret', maxRetries: 1),
             $httpClient,
             $psr17,
             $psr17,
@@ -123,17 +123,45 @@ final class TransportTest extends TestCase
         self::assertStringNotContainsString('key=', (string) $request->getUri());
     }
 
+    public function testSearchAndCatalogUseTheirOwnHosts(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['total' => 0, 'products' => []]);
+        $this->queueJson(['results' => []]);
+
+        $client->search()->search('x');
+        $client->catalog()->delete(['a']);
+
+        [$search, $catalog] = $this->sentRequests();
+        self::assertSame('search.api.metty.eu', $search->getUri()->getHost());
+        self::assertSame('catalog.api.metty.eu', $catalog->getUri()->getHost());
+    }
+
+    public function testRateLimitPayloadKeepsItsErrorCode(): void
+    {
+        $client = $this->client(maxRetries: 0);
+        $this->queueJson(['error' => ['code' => 'rate_limited', 'message' => 'Too many requests.']], 429);
+
+        try {
+            $client->search()->search('x');
+            self::fail('Očakávaná ApiException.');
+        } catch (ApiException $exception) {
+            self::assertSame('rate_limited', $exception->errorCode);
+            self::assertTrue($exception->isRateLimited());
+        }
+    }
+
     public function testSecretKeyInThePublicKeySlotIsRejected(): void
     {
         $this->expectExceptionMessageMatches('/public key must start with/');
 
-        new Configuration('https://api.metty.eu', 'sk_secret');
+        new Configuration('sk_secret');
     }
 
     public function testClientNeedsAtLeastOneKey(): void
     {
         $this->expectException(ConfigurationException::class);
 
-        new Configuration('https://api.metty.eu');
+        new Configuration();
     }
 }

@@ -1,8 +1,21 @@
 {
     "name": "getmetty/metty-php",
-    "description": "PHP client for the Metty search API",
-    "license": "proprietary",
+    "description": "PHP client for the Metty Search and Catalog APIs.",
     "type": "library",
+    "keywords": [
+        "metty",
+        "search",
+        "catalog",
+        "ecommerce",
+        "psr-18"
+    ],
+    "homepage": "https://docs.metty.eu/klient/php",
+    "license": "MIT",
+    "support": {
+        "docs": "https://docs.metty.eu/klient/php",
+        "issues": "https://github.com/getmetty/metty-php/issues",
+        "source": "https://github.com/getmetty/metty-php"
+    },
     "require": {
         "php": ">=8.1",
         "php-http/discovery": "^1.19",

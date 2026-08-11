@@ -28,7 +28,7 @@ trait FakeHttpTrait
         $this->httpClient = new MockClient($this->psr17);
 
         return new MettyClient(
-            new Configuration('https://api.metty.eu', $publicKey, $secretKey, $maxRetries),
+            new Configuration($publicKey, $secretKey, maxRetries: $maxRetries),
             $this->httpClient,
             $this->psr17,
             $this->psr17,

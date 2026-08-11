@@ -103,7 +103,7 @@ final class CatalogApiTest extends TestCase
 
         $request = $this->sentRequests()[0];
         self::assertSame('DELETE', $request->getMethod());
-        self::assertSame('https://api.metty.eu/catalog/products', (string) $request->getUri());
+        self::assertSame('https://catalog.api.metty.eu/catalog/products', (string) $request->getUri());
         self::assertSame(['ids' => ['a']], json_decode((string) $request->getBody(), true));
     }
 
@@ -128,7 +128,7 @@ final class CatalogApiTest extends TestCase
         self::assertSame('sync_abc', $outcome['sync_id']);
         self::assertSame(4, $outcome['commit']['removed']);
         self::assertStringContainsString('sync=sync_abc', (string) $this->sentRequests()[1]->getUri());
-        self::assertSame('https://api.metty.eu/catalog/syncs/sync_abc/commit', (string) $this->sentRequests()[2]->getUri());
+        self::assertSame('https://catalog.api.metty.eu/catalog/syncs/sync_abc/commit', (string) $this->sentRequests()[2]->getUri());
         self::assertSame(['force' => false], json_decode((string) $this->sentRequests()[2]->getBody(), true));
     }
 
