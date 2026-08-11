@@ -12,6 +12,9 @@ use Metty\Client\Exception\ConfigurationException;
  * `publicKey` (`pk_…`) je verejný kľúč pre čítanie a chodí v query, `secretKey` (`sk_…`) je privátny
  * kľúč pre zápisy katalógu a nikdy nesmie ísť do frontendu ani do logu. Prefix kľúča sa kontroluje
  * hneď, aby sa secret nedal omylom poslať v URL.
+ *
+ * Search a Catalog API bežia na samostatných hostoch; adresy sa prepisujú iba pre staging alebo
+ * lokálny vývoj.
  */
 final class Configuration
 {
@@ -19,19 +22,21 @@ final class Configuration
 
     public const SECRET_KEY_PREFIX = 'sk_';
 
-    public readonly string $baseUrl;
+    public const DEFAULT_SEARCH_URL = 'https://search.api.metty.eu';
+
+    public const DEFAULT_CATALOG_URL = 'https://catalog.api.metty.eu';
+
+    public readonly string $searchUrl;
+
+    public readonly string $catalogUrl;
 
     public function __construct(
-        string $baseUrl,
         public readonly ?string $publicKey = null,
         public readonly ?string $secretKey = null,
+        ?string $searchUrl = null,
+        ?string $catalogUrl = null,
         public readonly int $maxRetries = 3,
     ) {
-        $baseUrl = rtrim(trim($baseUrl), '/');
-        if ($baseUrl === '' || filter_var($baseUrl, FILTER_VALIDATE_URL) === false) {
-            throw new ConfigurationException('The base URL must be an absolute URL.');
-        }
-
         if ($publicKey === null && $secretKey === null) {
             throw new ConfigurationException('The client needs at least a public key for reads or a secret key for writes.');
         }
@@ -48,7 +53,16 @@ final class Configuration
             throw new ConfigurationException('The retry count must not be negative.');
         }
 
-        $this->baseUrl = $baseUrl;
+        $this->searchUrl = self::normalizeUrl($searchUrl ?? self::DEFAULT_SEARCH_URL);
+        $this->catalogUrl = self::normalizeUrl($catalogUrl ?? self::DEFAULT_CATALOG_URL);
+    }
+
+    /**
+     * Adresa API podľa toho, či ide o zápisové volanie katalógu.
+     */
+    public function baseUrl(bool $catalog): string
+    {
+        return $catalog ? $this->catalogUrl : $this->searchUrl;
     }
 
     /**
@@ -73,5 +87,15 @@ final class Configuration
         }
 
         return $this->secretKey;
+    }
+
+    private static function normalizeUrl(string $url): string
+    {
+        $url = rtrim(trim($url), '/');
+        if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
+            throw new ConfigurationException('The API URL must be an absolute URL.');
+        }
+
+        return $url;
     }
 }

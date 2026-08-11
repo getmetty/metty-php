@@ -5,6 +5,10 @@ PHP klient pre Metty API — synchronizácia katalógu a vyhľadávanie.
 Bez frameworkovej závislosti: HTTP ide cez PSR-18 klienta a PSR-17 factory, ktoré si dodá integrátor
 (alebo sa nájdu cez `php-http/discovery`). Logovanie je voliteľné cez PSR-3.
 
+Dokumentácia: **[docs.metty.eu/klient/php](https://docs.metty.eu/klient/php)** — klient,
+[Search API](https://docs.metty.eu/api/hladanie), [Catalog API](https://docs.metty.eu/api/zapis)
+a [chybové kódy](https://docs.metty.eu/api/chyby).
+
 ## Inštalácia
 
 ```bash
@@ -23,7 +27,6 @@ composer require symfony/http-client nyholm/psr7
 use Metty\Client\MettyClient;
 
 $client = MettyClient::create(
-    baseUrl: 'https://api.metty.eu',
     publicKey: 'pk_…',   // čítanie; patrí aj do frontendu
     secretKey: 'sk_…',   // zápisy katalógu; nikdy nesmie ísť do frontendu
 );
@@ -31,6 +34,16 @@ $client = MettyClient::create(
 
 Stačí ten kľúč, ktorý naozaj potrebujete — klient s `pk_` vie iba čítať, klient s `sk_` iba zapisovať.
 Prehodené kľúče klient odmietne hneď pri vytvorení, aby secret neskončil v URL.
+
+Search API (`search.api.metty.eu`) a Catalog API (`catalog.api.metty.eu`) sú predvolené, adresy sa
+prepisujú len pre staging alebo lokálny vývoj:
+
+```php
+$client = MettyClient::create('pk_…', 'sk_…',
+    searchUrl: 'https://search.api.metty.click',
+    catalogUrl: 'https://catalog.api.metty.click',
+);
+```
 
 ## Vyhľadávanie
 
@@ -177,4 +190,11 @@ Všetky implementujú `Metty\Client\Exception\MettyException`.
 
 ## Podpora
 
-PHP 8.1+. Klient sa verzuje nezávisle od servera.
+PHP 8.1+. Klient sa verzuje nezávisle od servera podľa [SemVer](https://semver.org/lang/sk/); zmeny
+sú v [CHANGELOG.md](CHANGELOG.md).
+
+Otázky a chyby: [GitHub issues](https://github.com/getmetty/metty-php/issues).
+
+## Licencia
+
+[MIT](LICENSE).
