@@ -17,89 +17,163 @@ Ak v projekte ešte nemáte PSR-18 klienta, doinštalujte si ľubovoľnú implem
 composer require symfony/http-client nyholm/psr7
 ```
 
-## Použitie
+## Kľúče
 
 ```php
 use Metty\Client\MettyClient;
-use Metty\Client\Content\ContentItem;
-use Metty\Client\Search\SearchQuery;
 
 $client = MettyClient::create(
     baseUrl: 'https://api.metty.eu',
-    apiKey: 'verejny-api-kluc',      // čítanie
-    secretKey: 'msk_…',              // zápisy; nikdy nepatrí do frontendu
+    publicKey: 'pk_…',   // čítanie; patrí aj do frontendu
+    secretKey: 'sk_…',   // zápisy katalógu; nikdy nesmie ísť do frontendu
 );
 ```
 
-### Vyhľadávanie
+Stačí ten kľúč, ktorý naozaj potrebujete — klient s `pk_` vie iba čítať, klient s `sk_` iba zapisovať.
+Prehodené kľúče klient odmietne hneď pri vytvorení, aby secret neskončil v URL.
+
+## Vyhľadávanie
 
 ```php
+use Metty\Client\Search\SearchQuery;
+
 $response = $client->search()->search(
     SearchQuery::for('vŕtačka')
-        ->filter('brand', 'Bosch')      // OR v rámci poľa, AND medzi poľami
-        ->exclude('availability', '0')  // negácia
-        ->range('price', 100, 200)
-        ->facet('brand', 10)
-        ->sortBy('price', 'asc')
-        ->size(20)
+        ->facet('brand', 'Bosch')         // AND medzi poľami, OR medzi hodnotami jedného poľa
+        ->facet('brand', 'Makita')
+        ->category('Náradie > Vŕtačky')
+        ->priceRange(100, 200)
+        ->sortBy('price_asc')             // relevance | price_asc | price_desc | name_asc
+        ->withSections('facets', 'categories', 'suggestions')
+        ->perPage(24)
         ->page(2),
 );
 
-foreach ($response->hits as $hit) {
-    echo $hit->identity, ' ', $hit->title(), ' ', $hit->webUrl(), PHP_EOL;
+foreach ($response->products as $product) {
+    echo $product->id, ' ', $product->name, ' ', $product->url, PHP_EOL;
 }
 
-echo $response->totalHits;
+echo $response->total, ' výsledkov na ', $response->pages, ' stránkach';
 ```
 
-`identity` je identita objektu; klikateľný odkaz je v `attributes['web_url']`.
+- `facet()` berie ľubovoľné facetové pole z feedu, `category()` cestu v tom istom tvare, aký vracia
+  `category` produktu.
+- `highlight` prichádza zo servera aj so značkami `[]`; klient zvýraznenie nedohaduje.
+- `categories`, `facets`, `priceRange` a `suggestions` sú naplnené iba pri `withSections()`.
+- Prázdny dotaz (`SearchQuery::for()`) je listing katalógu podľa filtrov.
 
-Ďalšie čítacie metódy: `autocomplete('vŕta')` a `facetValue('brand', 'bo')`.
-
-### Zápis katalógu
+Server ranguje prvých 200 výsledkov a hlbšie stránkovanie odmieta. Klient tú hranicu pozná:
+`hasNextPage()` ju rešpektuje, `searchAll()` na nej skončí a dotaz mimo okna zlyhá ešte pred
+requestom.
 
 ```php
-$result = $client->content()->replace([
-    ContentItem::product('sku-1', 'Príklepová vŕtačka', 'https://eshop.sk/vrtacka', price: 129.9, availability: 3, brand: 'Bosch'),
-    ContentItem::product('sku-2', 'Uhlová brúska', 'https://eshop.sk/bruska', price: 89.5),
-], idempotencyKey: 'nightly-2026-07-31');
+foreach ($client->search()->searchAll(SearchQuery::for('vŕtačka')) as $product) {
+    echo $product->name, PHP_EOL;
+}
+```
+
+`searchAll()` si veľkosť stránky určuje sám, aby okno vyčerpal celé.
+
+Našepkávanie:
+
+```php
+$suggest = $client->search()->suggest('vŕta', limit: 8);
+
+$suggest->suggestions;  // [['query' => 'vŕtačka', 'count' => 41], …]
+$suggest->products;     // najviac 5 skrátených produktov
+```
+
+## Zápis katalógu
+
+```php
+use Metty\Client\Catalog\CatalogProduct;
+
+$result = $client->catalog()->replace([
+    CatalogProduct::create('sku-1', 'Príklepová vŕtačka', 'https://eshop.sk/vrtacka',
+        price: 129.9, inStock: true, brand: 'Bosch', category: 'Náradie > Vŕtačky',
+        params: ['farba' => 'modrá', 'príkon' => '800 W']),
+    CatalogProduct::create('sku-2', 'Uhlová brúska', 'https://eshop.sk/bruska', price: 89.5),
+]);
 
 if ($result->hasFailures()) {
     foreach ($result->failures() as $failure) {
-        echo $failure->identity, ': ', $failure->errorCode, ' — ', $failure->errorMessage, PHP_EOL;
+        echo $failure->id, ': ', $failure->error, ' — ', $failure->message, PHP_EOL;
     }
 }
 ```
 
-`patch()` mení iba uvedené polia, `delete(['sku-1'])` objekty odstráni.
+`replace()` je úplné nahradenie — neuvedené pole sa na serveri zmaže. `patch()` mení iba uvedené
+polia a `delete(['sku-1'])` produkty odstráni.
 
-### Bezpečný full snapshot
+Pri `patch()` je rozdiel medzi vynechaným poľom a poľom s hodnotou `null`; vymazanie sa preto
+zapisuje priamo:
 
 ```php
-$outcome = $client->content()->synchronizeCatalog($items, generation: '2026-07-31');
-echo $outcome['commit']['removed']; // koľko starých objektov zmizlo
+$client->catalog()->patch([
+    new CatalogProduct('sku-1', ['price' => 99.0, 'brand' => null]),
+]);
 ```
 
-Ak sa niektorý objekt nepodarí nahrať, klient generáciu **necommitne** — inak by commit zmazal
-objekty, ktoré práve neprešli. Vedomé prepísanie je `force: true`.
+`params` sú jediný zdroj facetovateľných atribútov — to isté miesto, kam chodia facety z XML feedu.
 
-### Export
+## Bezpečný full snapshot
 
 ```php
-foreach ($client->content()->export() as $object) {
-    echo $object['identity'], PHP_EOL;
+$outcome = $client->catalog()->synchronize($products);
+
+echo $outcome['sync_id'];
+echo $outcome['commit']['removed'];  // koľko starých produktov zmizlo
+```
+
+Klient otvorí sync, nahrá pod ním celý katalóg a až potom ho commitne. Ak sa niektorý produkt
+nepodarí nahrať, sync **necommitne** — inak by commit zmazal produkty, ktoré práve neprešli — a
+vyhodí `SyncIncompleteException` s `syncId` a výsledkami dávky. Sync ostáva otvorený, takže chybné
+produkty sa dajú dopísať a commitnúť neskôr:
+
+```php
+use Metty\Client\Exception\SyncIncompleteException;
+
+try {
+    $client->catalog()->synchronize($products);
+} catch (SyncIncompleteException $exception) {
+    $client->catalog()->replace($opravene, $exception->syncId);
+    $client->catalog()->commit($exception->syncId);
+}
+```
+
+Táto poistka sa nedá vypnúť — `force: true` sa týka výhradne serverovej poistky, ktorá odmietne
+snapshot pokrývajúci menej než polovicu katalógu. Prázdny snapshot klient odmietne vždy.
+
+## Export
+
+```php
+foreach ($client->catalog()->export() as $product) {
+    echo $product['id'], PHP_EOL;
 }
 ```
 
 ## Čo klient rieši za vás
 
-- **dávkovanie** — katalóg sa rozdelí na dávky podľa limitu servera (100 objektov)
-- **partial failure** — dávka nespadne celá; dostanete stav každého objektu
-- **idempotency key** — každá dávka má vlastný kľúč, opakované odoslanie nevytvorí duplicity
-- **retry s backoffom** — iba `429` (rešpektuje `Retry-After`) a `5xx`; ostatné `4xx` sa neopakujú
-- **poistka pri snapshote** — neúplná generácia sa necommitne
+- **dávkovanie** — katalóg sa rozdelí na dávky podľa limitu servera (100 produktov)
+- **partial failure** — dávka nespadne celá; dostanete stav každého produktu
+- **hranice servera** — neznáme radenie, sekcia, facetový názov či stránka mimo okna zlyhajú
+  lokálne, nie až ako `422`
+- **retry s backoffom** — `429` vždy (rešpektuje `Retry-After`), chyba servera alebo siete iba pri
+  metódach, ktoré sa dajú bez následkov zopakovať; ostatné `4xx` nikdy
 
+Idempotency kľúč netreba: server zapisuje podľa `id`, takže zopakovaná dávka nevytvorí duplicity.
 `Authorization` sa nikdy neloguje ani nedostane do výnimky.
+
+## Chyby
+
+| výnimka | kedy |
+|---|---|
+| `ConfigurationException` | zlé nastavenie alebo dotaz, ktorý by server odmietol |
+| `ApiException` | server vrátil `{"error": …, "message": …}`; nesie `statusCode` a `errorCode` |
+| `SyncIncompleteException` | full sync sa nedokončil celý a nebol commitnutý |
+| `TransportException` | sieťová chyba alebo odpoveď, ktorá sa nedá spracovať |
+
+Všetky implementujú `Metty\Client\Exception\MettyException`.
 
 ## Podpora
 
