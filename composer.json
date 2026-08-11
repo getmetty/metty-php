@@ -9,10 +9,10 @@
         "ecommerce",
         "psr-18"
     ],
-    "homepage": "https://docs.metty.eu/klient/php",
+    "homepage": "https://docs.metty.eu/client/php",
     "license": "MIT",
     "support": {
-        "docs": "https://docs.metty.eu/klient/php",
+        "docs": "https://docs.metty.eu/client/php",
         "issues": "https://github.com/getmetty/metty-php/issues",
         "source": "https://github.com/getmetty/metty-php"
     },

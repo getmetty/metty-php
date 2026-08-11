@@ -3,6 +3,13 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
+## [1.0.1] — 2026-08-11
+
+### Fixed
+
+- `homepage` and `support.docs` in `composer.json` pointed at the old documentation path, which no
+  longer exists.
+
 ## [1.0.0] — 2026-08-11
 
 First public release.
@@ -21,4 +28,5 @@ First public release.
 - Client-side enforcement of server boundaries — the 200 result window, page size, sorting,
   sections and key prefixes.
 
+[1.0.1]: https://github.com/getmetty/metty-php/releases/tag/v1.0.1
 [1.0.0]: https://github.com/getmetty/metty-php/releases/tag/v1.0.0
