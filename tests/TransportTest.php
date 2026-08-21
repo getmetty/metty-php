@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Metty\Client\Tests;
 
+use Http\Client\Exception\NetworkException;
 use Http\Mock\Client as MockClient;
 use Metty\Client\Catalog\CatalogProduct;
 use Metty\Client\Configuration;
 use Metty\Client\Exception\ApiException;
 use Metty\Client\Exception\ConfigurationException;
+use Metty\Client\Exception\TransportException;
 use Metty\Client\Http\Transport;
 use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\TestCase;
@@ -163,5 +165,100 @@ final class TransportTest extends TestCase
         $this->expectException(ConfigurationException::class);
 
         new Configuration();
+    }
+
+    public function testRedirectIsNotTreatedAsSuccess(): void
+    {
+        $client = $this->client();
+        $this->queueJson([], 302, ['Location' => 'https://elsewhere.example/search']);
+
+        try {
+            $client->search()->search('x');
+            self::fail('Expected an ApiException.');
+        } catch (ApiException $exception) {
+            self::assertSame(302, $exception->statusCode);
+        }
+    }
+
+    public function testRetryAfterAsHttpDateIsHonoured(): void
+    {
+        $slept = $this->retryAfter(gmdate('D, d M Y H:i:s \G\M\T', time() + 5));
+
+        self::assertGreaterThanOrEqual(4000, $slept[0]);
+        self::assertLessThanOrEqual(5000, $slept[0]);
+    }
+
+    public function testRetryAfterInThePastDoesNotWait(): void
+    {
+        self::assertSame([0], $this->retryAfter(gmdate('D, d M Y H:i:s \G\M\T', time() - 60)));
+    }
+
+    public function testRetryAfterIsClampedToAnUpperBound(): void
+    {
+        self::assertSame([60000], $this->retryAfter('86400'));
+    }
+
+    public function testNegativeRetryAfterDoesNotWait(): void
+    {
+        self::assertSame([0], $this->retryAfter('-10'));
+    }
+
+    public function testUnparsableRetryAfterFallsBackToBackoff(): void
+    {
+        $slept = $this->retryAfter('soon');
+
+        self::assertGreaterThanOrEqual(200, $slept[0]);
+        self::assertLessThanOrEqual(400, $slept[0]);
+    }
+
+    public function testNetworkExceptionIsNotAttachedToTheThrownException(): void
+    {
+        $psr17 = new Psr17Factory();
+        $httpClient = new MockClient($psr17);
+        $transport = new Transport(
+            new Configuration('pk_public', 'sk_secret', maxRetries: 0),
+            $httpClient,
+            $psr17,
+            $psr17,
+        );
+
+        $request = $psr17->createRequest('GET', 'https://search.api.metty.eu/search')
+            ->withHeader('Authorization', 'Bearer sk_secret');
+        $httpClient->addException(new NetworkException('Connection refused.', $request));
+
+        try {
+            $transport->get('/search', ['q' => 'x']);
+            self::fail('Expected a TransportException.');
+        } catch (TransportException $exception) {
+            self::assertNull($exception->getPrevious(), 'The PSR-18 exception carries the authenticated request.');
+            self::assertStringNotContainsString('sk_secret', print_r($exception, true));
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function retryAfter(string $header): array
+    {
+        $psr17 = new Psr17Factory();
+        $httpClient = new MockClient($psr17);
+        $slept = [];
+        $transport = new Transport(
+            new Configuration('pk_public', 'sk_secret', maxRetries: 1),
+            $httpClient,
+            $psr17,
+            $psr17,
+            null,
+            static function (int $milliseconds) use (&$slept): void {
+                $slept[] = $milliseconds;
+            },
+        );
+
+        $httpClient->addResponse($psr17->createResponse(429)->withHeader('Retry-After', $header));
+        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"total":0}')));
+
+        $transport->get('/search', ['q' => 'x']);
+
+        return $slept;
     }
 }

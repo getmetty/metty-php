@@ -3,6 +3,21 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- A network error no longer attaches the PSR-18 exception, which carries the authenticated request
+  and its bearer secret, as the cause.
+- A `3xx` response is no longer read as a success; only `2xx` is.
+- `Retry-After` also accepts an HTTP-date, and the wait is clamped to 60 s.
+- `beginSync()` rejects a response without a usable `sync_id`, and a write response without a
+  `results` list is reported as a `TransportException` instead of looking like a success.
+
+### Added
+
+- README: the timeouts a PSR-18 client needs, and how to inject a preconfigured one.
+
 ## [1.0.1] — 2026-08-11
 
 ### Fixed

@@ -156,4 +156,11 @@ final class SearchApiTest extends TestCase
 
         $client->search()->search('x');
     }
+
+    public function testPagingStopsWhereTheServerWindowEnds(): void
+    {
+        $this->expectException(ConfigurationException::class);
+
+        SearchQuery::for('x')->perPage(24)->page(9)->toQueryParameters();
+    }
 }

@@ -25,6 +25,38 @@ If your project does not have a PSR-18 client yet, install any implementation, f
 composer require symfony/http-client nyholm/psr7
 ```
 
+## Timeouts
+
+Autodiscovery (`php-http/discovery`) picks whatever client it finds, and none of the
+implementations guarantee a timeout — with the wrong one a request can hang until the PHP process
+is killed. Configure the connect and total timeouts yourself and pass the ready-made client in:
+
+```php
+use Metty\Client\Configuration;
+use Metty\Client\MettyClient;
+use Nyholm\Psr7\Factory\Psr17Factory;
+use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpClient\Psr18Client;
+
+$psr17 = new Psr17Factory();
+$httpClient = new Psr18Client(
+    HttpClient::create(['timeout' => 10, 'max_duration' => 30]),
+    $psr17,
+    $psr17,
+);
+
+$client = new MettyClient(
+    new Configuration('<PUBLIC_API_KEY>', '<SECRET_API_KEY>'),
+    $httpClient,
+    $psr17,
+    $psr17,
+);
+```
+
+`timeout` is the idle timeout of the connection, `max_duration` the ceiling for the whole request;
+Guzzle calls the same pair `connect_timeout` and `timeout`. They bound a single attempt — a retried
+call also waits between the attempts, at most 60 s per retry when the server sends `Retry-After`.
+
 ## Keys
 
 ```php
