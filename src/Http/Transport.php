@@ -44,6 +44,8 @@ final class Transport
 
     private const BASE_BACKOFF_MS = 200;
 
+    private const MAX_RETRY_AFTER_MS = 60000;
+
     private readonly ClientInterface $httpClient;
 
     private readonly RequestFactoryInterface $requestFactory;
@@ -98,7 +100,7 @@ final class Transport
                 $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $catalog));
             } catch (ClientExceptionInterface $exception) {
                 if (!$this->mayRepeat($method) || $attempt > $this->configuration->maxRetries) {
-                    throw new TransportException('The request to Metty failed: ' . $exception->getMessage(), 0, $exception);
+                    throw new TransportException(sprintf('The request to Metty failed (%s).', $exception::class));
                 }
 
                 $this->wait($attempt, null);
@@ -106,7 +108,7 @@ final class Transport
             }
 
             $status = $response->getStatusCode();
-            if ($status < 400) {
+            if ($status >= 200 && $status < 300) {
                 return $this->decode($response);
             }
 
@@ -243,9 +245,8 @@ final class Transport
 
     private function wait(int $attempt, ?string $retryAfter): void
     {
-        $milliseconds = $retryAfter !== null && is_numeric($retryAfter)
-            ? (int) ((float) $retryAfter * 1000)
-            : self::BASE_BACKOFF_MS * (2 ** ($attempt - 1)) + random_int(0, self::BASE_BACKOFF_MS);
+        $milliseconds = $this->retryAfterMilliseconds($retryAfter)
+            ?? self::BASE_BACKOFF_MS * (2 ** ($attempt - 1)) + random_int(0, self::BASE_BACKOFF_MS);
 
         if ($this->sleeper !== null) {
             ($this->sleeper)($milliseconds);
@@ -254,5 +255,26 @@ final class Transport
         }
 
         usleep($milliseconds * 1000);
+    }
+
+    private function retryAfterMilliseconds(?string $retryAfter): ?int
+    {
+        $value = trim((string) $retryAfter);
+        if ($value === '') {
+            return null;
+        }
+
+        if (is_numeric($value)) {
+            $milliseconds = (int) round(min(max((float) $value, 0.0), self::MAX_RETRY_AFTER_MS / 1000) * 1000);
+        } else {
+            $timestamp = strtotime($value);
+            if ($timestamp === false) {
+                return null;
+            }
+
+            $milliseconds = ($timestamp - time()) * 1000;
+        }
+
+        return max(0, min($milliseconds, self::MAX_RETRY_AFTER_MS));
     }
 }

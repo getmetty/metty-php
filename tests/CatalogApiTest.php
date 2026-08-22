@@ -9,6 +9,7 @@ use Metty\Client\Catalog\CatalogProduct;
 use Metty\Client\Exception\ApiException;
 use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Exception\SyncIncompleteException;
+use Metty\Client\Exception\TransportException;
 use PHPUnit\Framework\TestCase;
 
 final class CatalogApiTest extends TestCase
@@ -198,6 +199,38 @@ final class CatalogApiTest extends TestCase
 
         $this->expectException(ApiException::class);
         $this->expectExceptionMessageMatches('/catalog_mode_conflict/');
+
+        $client->catalog()->delete(['a']);
+    }
+
+    public function testSyncWithoutIdIsRejected(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['status' => 'open']);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessageMatches('/sync_id/');
+
+        $client->catalog()->beginSync();
+    }
+
+    public function testWriteResponseWithoutResultsIsNotASuccess(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['status' => 'ok']);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessageMatches('/results/');
+
+        $client->catalog()->replace([CatalogProduct::create('a', 'A', 'https://e.sk/a')]);
+    }
+
+    public function testMalformedItemInAWriteResponseIsNotASuccess(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['results' => ['ok']]);
+
+        $this->expectException(TransportException::class);
 
         $client->catalog()->delete(['a']);
     }

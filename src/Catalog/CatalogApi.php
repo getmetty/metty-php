@@ -6,6 +6,7 @@ namespace Metty\Client\Catalog;
 
 use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Exception\SyncIncompleteException;
+use Metty\Client\Exception\TransportException;
 use Metty\Client\Http\Transport;
 
 /**
@@ -69,7 +70,12 @@ final class CatalogApi
      */
     public function beginSync(): string
     {
-        return (string) ($this->transport->send('POST', self::SYNCS_PATH, [], null, true)['sync_id'] ?? '');
+        $syncId = $this->transport->send('POST', self::SYNCS_PATH, [], null, true)['sync_id'] ?? null;
+        if (!is_string($syncId) || $syncId === '') {
+            throw new TransportException('Metty did not return a sync_id when opening a sync.');
+        }
+
+        return $syncId;
     }
 
     /**

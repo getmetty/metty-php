@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Metty\Client\Catalog;
 
+use Metty\Client\Exception\TransportException;
+
 /**
  * The result of a whole write, even when it was split across several batches.
  *
@@ -24,11 +26,18 @@ final class WriteResult implements \Countable
      */
     public static function fromArray(array $payload): self
     {
+        $results = $payload['results'] ?? null;
+        if (!is_array($results)) {
+            throw new TransportException('Metty returned a write response without a "results" list.');
+        }
+
         $items = [];
-        foreach (is_array($payload['results'] ?? null) ? $payload['results'] : [] as $item) {
-            if (is_array($item)) {
-                $items[] = ItemResult::fromArray($item);
+        foreach ($results as $item) {
+            if (!is_array($item)) {
+                throw new TransportException('Metty returned a write response with a malformed item.');
             }
+
+            $items[] = ItemResult::fromArray($item);
         }
 
         return new self($items);
