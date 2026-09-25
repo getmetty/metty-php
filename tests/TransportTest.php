@@ -12,7 +12,10 @@ use Metty\Client\Exception\ApiException;
 use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Exception\TransportException;
 use Metty\Client\Http\Transport;
+use Metty\Client\MettyClient;
 use Nyholm\Psr7\Factory\Psr17Factory;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\RequiresPhp;
 use PHPUnit\Framework\TestCase;
 
 final class TransportTest extends TestCase
@@ -167,6 +170,31 @@ final class TransportTest extends TestCase
         new Configuration();
     }
 
+    #[DataProvider('insecureUrls')]
+    public function testApiUrlWithoutHttpsIsRejected(string $url): void
+    {
+        $this->expectExceptionMessage('The API URL must use https.');
+
+        new Configuration('pk_public', catalogUrl: $url);
+    }
+
+    /**
+     * @return iterable<string, array{string}>
+     */
+    public static function insecureUrls(): iterable
+    {
+        yield 'http' => ['http://catalog.api.metty.eu'];
+        yield 'uppercase http' => ['HTTP://catalog.api.metty.eu'];
+        yield 'ftp' => ['ftp://catalog.api.metty.eu'];
+    }
+
+    public function testHttpsUrlOverrideIsAccepted(): void
+    {
+        $configuration = new Configuration('pk_public', searchUrl: 'https://search.example.test/');
+
+        self::assertSame('https://search.example.test', $configuration->searchUrl);
+    }
+
     public function testRedirectIsNotTreatedAsSuccess(): void
     {
         $client = $this->client();
@@ -232,6 +260,21 @@ final class TransportTest extends TestCase
         } catch (TransportException $exception) {
             self::assertNull($exception->getPrevious(), 'The PSR-18 exception carries the authenticated request.');
             self::assertStringNotContainsString('sk_secret', print_r($exception, true));
+        }
+    }
+
+    #[RequiresPhp('>= 8.2')]
+    public function testSecretKeyNeverLeaksIntoConstructionTrace(): void
+    {
+        $ignoreArgs = (string) ini_set('zend.exception_ignore_args', '0');
+
+        try {
+            MettyClient::create('pk_public', 'sk_secret', 'not a url');
+            self::fail('Expected a ConfigurationException.');
+        } catch (ConfigurationException $exception) {
+            self::assertNotContains('sk_secret', array_merge(...array_column($exception->getTrace(), 'args')));
+        } finally {
+            ini_set('zend.exception_ignore_args', $ignoreArgs);
         }
     }
 
