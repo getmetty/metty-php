@@ -72,7 +72,8 @@ Pass only the key you actually need — a client with `pk_` can only read, a cli
 only write. Swapped keys are rejected at construction time so that a secret never ends up in a URL.
 
 The Search API (`search.api.metty.eu`) and the Catalog API (`catalog.api.metty.eu`) are the
-defaults; override the addresses only for staging or local development:
+defaults; override the addresses only for staging or local development. Both must use `https`;
+any other scheme is rejected at construction time so that a key is never sent in cleartext:
 
 ```php
 $client = MettyClient::create('<PUBLIC_API_KEY>', '<SECRET_API_KEY>',

@@ -41,6 +41,7 @@ final class MettyClient
 
     public static function create(
         ?string $publicKey = null,
+        #[\SensitiveParameter]
         ?string $secretKey = null,
         ?string $searchUrl = null,
         ?string $catalogUrl = null,

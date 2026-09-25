@@ -32,6 +32,7 @@ final class Configuration
 
     public function __construct(
         public readonly ?string $publicKey = null,
+        #[\SensitiveParameter]
         public readonly ?string $secretKey = null,
         ?string $searchUrl = null,
         ?string $catalogUrl = null,
@@ -94,6 +95,10 @@ final class Configuration
         $url = rtrim(trim($url), '/');
         if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
             throw new ConfigurationException('The API URL must be an absolute URL.');
+        }
+
+        if (strtolower((string) parse_url($url, PHP_URL_SCHEME)) !== 'https') {
+            throw new ConfigurationException('The API URL must use https.');
         }
 
         return $url;
