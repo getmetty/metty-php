@@ -22,7 +22,7 @@ final class TransportTest extends TestCase
 {
     use FakeHttpTrait;
 
-    public function testRateLimitIsRetriedWithRetryAfter(): void
+    public function testCatalogRateLimitIsRetriedWithRetryAfter(): void
     {
         $psr17 = new Psr17Factory();
         $httpClient = new MockClient($psr17);
@@ -39,12 +39,30 @@ final class TransportTest extends TestCase
         );
 
         $httpClient->addResponse($psr17->createResponse(429)->withHeader('Retry-After', '2'));
-        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"total":0}')));
+        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"results":[]}')));
 
-        $payload = $transport->get('/search', ['q' => 'x']);
+        $payload = $transport->send('PUT', '/catalog/products', [], [['id' => 'a']], true);
 
         self::assertSame([2000], $slept, 'Retry-After must dictate how long the client waits.');
-        self::assertSame(0, $payload['total']);
+        self::assertSame([], $payload['results']);
+    }
+
+    public function testSearchRateLimitIsThrownWithoutRetrying(): void
+    {
+        $client = $this->client(maxRetries: 3);
+        $this->queueJson(['error' => 'rate_limited', 'message' => 'Too many requests.'], 429, ['Retry-After' => '0']);
+        $this->queueJson(['error' => 'rate_limited', 'message' => 'Too many requests.'], 429, ['Retry-After' => '0']);
+
+        foreach ([static fn () => $client->search()->search('x'), static fn () => $client->search()->suggest('x')] as $call) {
+            try {
+                $call();
+                self::fail('Expected an ApiException.');
+            } catch (ApiException $exception) {
+                self::assertTrue($exception->isRateLimited());
+            }
+        }
+
+        self::assertCount(2, $this->sentRequests(), 'A rate-limited read must not wait and repeat inside a page render.');
     }
 
     public function testClientErrorIsNotRetried(): void
@@ -298,9 +316,9 @@ final class TransportTest extends TestCase
         );
 
         $httpClient->addResponse($psr17->createResponse(429)->withHeader('Retry-After', $header));
-        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"total":0}')));
+        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"results":[]}')));
 
-        $transport->get('/search', ['q' => 'x']);
+        $transport->send('PUT', '/catalog/products', [], [['id' => 'a']], true);
 
         return $slept;
     }

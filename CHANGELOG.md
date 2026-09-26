@@ -18,6 +18,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
   accepts the old form. A facet name with a space or a dot (`Max. výkon`) or one named like a search
   parameter (`sort`) now filters as expected, and `facet()` no longer rejects reserved names.
   Requires the matching Search API release; an older client gets `422` for any facet filter.
+- `search()` and `suggest()` no longer retry a `429`: they throw an `ApiException`
+  (`isRateLimited()`) at once instead of sleeping up to 60 s per attempt on `Retry-After` inside a
+  page render. Catalog calls still retry a `429`; server and network errors on reads are still
+  retried with a short backoff.
+- The README "Timeouts" section moved to [docs.metty.eu/client/php](https://docs.metty.eu/client/php#timeouts).
 
 ## [1.2.0] — 2026-09-25
 

@@ -29,8 +29,10 @@ use Psr\Log\NullLogger;
  * A repeated query value is sent as `field[]=…`; without the brackets the server keeps only the
  * last one.
  *
- * `429` is always retried: the server rejected the request rather than performing it. A server or
- * network error is retried only for methods that can be repeated without changing the outcome.
+ * `429` is retried only for catalog calls: the server rejected the request rather than performing
+ * it, and a batch can wait. Search and suggest usually run inside a page render, so there a `429`
+ * is thrown at once. A server or network error is retried only for methods that can be repeated
+ * without changing the outcome.
  */
 final class Transport
 {
@@ -112,7 +114,7 @@ final class Transport
                 return $this->decode($response);
             }
 
-            if ($this->isRetryable($method, $status) && $attempt <= $this->configuration->maxRetries) {
+            if ($this->isRetryable($method, $status, $catalog) && $attempt <= $this->configuration->maxRetries) {
                 $this->logger->warning('Metty request retried.', [
                     'path' => $path,
                     'status' => $status,
@@ -126,10 +128,10 @@ final class Transport
         }
     }
 
-    private function isRetryable(string $method, int $status): bool
+    private function isRetryable(string $method, int $status, bool $catalog): bool
     {
         if ($status === 429) {
-            return true;
+            return $catalog;
         }
 
         return $this->mayRepeat($method) && in_array($status, self::SERVER_ERROR_STATUSES, true);
