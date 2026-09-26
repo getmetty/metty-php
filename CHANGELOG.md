@@ -11,10 +11,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
   size of the product `image` (`image_size`); only the sizes in `SearchQuery::IMAGE_SIZES` are
   accepted, anything else is a `ConfigurationException` before the request.
 
-### Fixed
+### Changed
 
-- `image_size` is a reserved search parameter, so `facet('image_size', …)` fails locally instead of
-  being rejected by the server.
+- **Breaking wire format, the PHP API is unchanged.** Facet filters are sent as
+  `filter[<field>][]=<value>` instead of top-level `<field>[]=<value>`; the Search API no longer
+  accepts the old form. A facet name with a space or a dot (`Max. výkon`) or one named like a search
+  parameter (`sort`) now filters as expected, and `facet()` no longer rejects reserved names.
+  Requires the matching Search API release; an older client gets `422` for any facet filter.
 
 ## [1.2.0] — 2026-09-25
 

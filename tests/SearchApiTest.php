@@ -32,8 +32,9 @@ final class SearchApiTest extends TestCase
 
         $uri = urldecode((string) $this->sentRequests()[0]->getUri());
         self::assertStringContainsString('q=vŕtačka', $uri);
-        self::assertStringContainsString('brand[]=Bosch', $uri);
-        self::assertStringContainsString('brand[]=Makita', $uri);
+        self::assertStringContainsString('filter[brand][]=Bosch', $uri);
+        self::assertStringContainsString('filter[brand][]=Makita', $uri);
+        self::assertStringNotContainsString('&brand[]', $uri);
         self::assertStringContainsString('category[]=Náradie > Vŕtačky', $uri);
         self::assertStringContainsString('price_min=100', $uri);
         self::assertStringContainsString('price_max=200', $uri);
@@ -51,11 +52,19 @@ final class SearchApiTest extends TestCase
         SearchQuery::for('x')->imageSize(120);
     }
 
-    public function testImageSizeIsReservedAndCannotBeUsedAsFacet(): void
+    public function testFacetNamesKeepSpacesDotsAndParameterNames(): void
     {
-        $this->expectExceptionMessageMatches('/reserved search parameter/');
+        $client = $this->client();
+        $this->queueJson(['query' => 'x', 'total' => 0, 'page' => 1, 'per_page' => 24, 'pages' => 0, 'products' => []]);
 
-        SearchQuery::for('x')->facet('image_size', '300');
+        $client->search()->search(SearchQuery::for('x')->facet('Max. výkon', '800 W')->facet('sort', 'A'));
+
+        $uri = (string) $this->sentRequests()[0]->getUri();
+        self::assertStringContainsString('filter%5BMax.%20v%C3%BDkon%5D%5B%5D=800%20W', $uri);
+        self::assertStringContainsString('filter%5Bsort%5D%5B%5D=A', $uri);
+        parse_str((string) parse_url($uri, PHP_URL_QUERY), $parsed);
+        self::assertSame(['Max. výkon' => ['800 W'], 'sort' => ['A']], $parsed['filter']);
+        self::assertArrayNotHasKey('sort', $parsed);
     }
 
     public function testResponseIsMappedToTypedObjects(): void
@@ -111,13 +120,6 @@ final class SearchApiTest extends TestCase
         $this->expectException(ConfigurationException::class);
 
         SearchQuery::for('x')->perPage(100)->page(3)->toQueryParameters();
-    }
-
-    public function testReservedParameterCannotBeUsedAsFacet(): void
-    {
-        $this->expectExceptionMessageMatches('/reserved search parameter/');
-
-        SearchQuery::for('x')->facet('sort', 'price_asc');
     }
 
     public function testSearchAllWalksTheWholeWindowAtFullPageSize(): void

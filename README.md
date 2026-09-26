@@ -107,8 +107,9 @@ foreach ($response->products as $product) {
 echo $response->total, ' results across ', $response->pages, ' pages';
 ```
 
-- `facet()` takes any facet field from your catalog, `category()` a path in the same format the
-  product's `category` is returned in.
+- `facet()` takes any facet field from your catalog exactly as the response's `facets[].field` names
+  it, spaces and dots included; it is sent as `filter[<field>][]`. `category()` takes a path in the
+  same format the product's `category` is returned in.
 - `highlight` arrives from the server with `[]` markers already in place; the client never guesses
   highlighting on its own.
 - `categories`, `facets`, `priceRange` and `suggestions` are only populated when requested through
