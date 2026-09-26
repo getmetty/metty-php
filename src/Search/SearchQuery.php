@@ -25,7 +25,9 @@ final class SearchQuery
 
     public const SECTIONS = ['facets', 'categories', 'suggestions'];
 
-    private const RESERVED = ['key', 'q', 'page', 'per_page', 'category', 'price_min', 'price_max', 'sort', 'include'];
+    public const IMAGE_SIZES = [40, 60, 80, 100, 150, 200, 250, 300, 400, 500];
+
+    private const RESERVED = ['key', 'q', 'page', 'per_page', 'category', 'price_min', 'price_max', 'sort', 'include', 'image_size'];
 
     /** @var list<string> */
     private array $categories = [];
@@ -45,6 +47,8 @@ final class SearchQuery
 
     /** @var list<string> */
     private array $include = [];
+
+    private ?int $imageSize = null;
 
     private function __construct(
         private readonly string $query,
@@ -135,6 +139,28 @@ final class SearchQuery
     }
 
     /**
+     * The largest edge of the product `image` in pixels, one of `IMAGE_SIZES`; the server scales down, never up.
+     */
+    public function imageSize(int $pixels): self
+    {
+        $this->imageSize = self::checkImageSize($pixels);
+
+        return $this;
+    }
+
+    /**
+     * @internal shared with `SearchApi::suggest()`
+     */
+    public static function checkImageSize(int $pixels): int
+    {
+        if (!in_array($pixels, self::IMAGE_SIZES, true)) {
+            throw new ConfigurationException(sprintf('The image_size supports only: %s.', implode(', ', self::IMAGE_SIZES)));
+        }
+
+        return $pixels;
+    }
+
+    /**
      * @return array<string, scalar|array<int, string>|null>
      */
     public function toQueryParameters(): array
@@ -152,6 +178,7 @@ final class SearchQuery
             'price_max' => $this->priceMax,
             'sort' => $this->sort,
             'include' => $this->include === [] ? null : implode(',', $this->include),
+            'image_size' => $this->imageSize,
         ];
 
         foreach ($this->facets as $field => $values) {

@@ -96,7 +96,8 @@ $response = $client->search()->search(
         ->sortBy('price_asc')              // relevance | price_asc | price_desc | name_asc
         ->withSections('facets', 'categories', 'suggestions')
         ->perPage(24)
-        ->page(2),
+        ->page(2)
+        ->imageSize(300),                  // largest edge of the product image in pixels
 );
 
 foreach ($response->products as $product) {
@@ -113,6 +114,8 @@ echo $response->total, ' results across ', $response->pages, ' pages';
 - `categories`, `facets`, `priceRange` and `suggestions` are only populated when requested through
   `withSections()`.
 - An empty query (`SearchQuery::for()`) lists the catalog according to the filters.
+- `imageSize()` caps the largest edge of the product `image`, one of `SearchQuery::IMAGE_SIZES`
+  (40, 60, 80, 100, 150, 200, 250, 300, 400, 500); without it the image is the 500 px variant.
 
 The server ranks the first 200 results and rejects deeper paging. The client knows that boundary:
 `hasNextPage()` respects it, `searchAll()` stops there, and a query outside the window fails before
@@ -129,7 +132,7 @@ foreach ($client->search()->searchAll(SearchQuery::for('drill')) as $product) {
 Autocomplete:
 
 ```php
-$suggest = $client->search()->suggest('dri', limit: 8);
+$suggest = $client->search()->suggest('dri', limit: 8, imageSize: 100);
 
 $suggest->suggestions;  // [['query' => 'drill', 'count' => 41], …]
 $suggest->products;     // at most 5 compact products

@@ -26,7 +26,8 @@ final class SearchApiTest extends TestCase
                 ->sortBy('price_desc')
                 ->withSections('facets', 'suggestions')
                 ->perPage(20)
-                ->page(2),
+                ->page(2)
+                ->imageSize(300),
         );
 
         $uri = urldecode((string) $this->sentRequests()[0]->getUri());
@@ -40,6 +41,21 @@ final class SearchApiTest extends TestCase
         self::assertStringContainsString('include=facets,suggestions', $uri);
         self::assertStringContainsString('per_page=20', $uri);
         self::assertStringContainsString('page=2', $uri);
+        self::assertStringContainsString('image_size=300', $uri);
+    }
+
+    public function testUnsupportedImageSizeIsRejectedBeforeTheRequest(): void
+    {
+        $this->expectExceptionMessageMatches('/image_size supports only/');
+
+        SearchQuery::for('x')->imageSize(120);
+    }
+
+    public function testImageSizeIsReservedAndCannotBeUsedAsFacet(): void
+    {
+        $this->expectExceptionMessageMatches('/reserved search parameter/');
+
+        SearchQuery::for('x')->facet('image_size', '300');
     }
 
     public function testResponseIsMappedToTypedObjects(): void
@@ -134,6 +150,30 @@ final class SearchApiTest extends TestCase
         self::assertSame('sku-1', $response->products[0]->id);
         self::assertNull($response->products[0]->inStock);
         self::assertStringContainsString('limit=3', (string) $this->sentRequests()[0]->getUri());
+        self::assertStringNotContainsString('image_size', (string) $this->sentRequests()[0]->getUri());
+    }
+
+    public function testSuggestSendsTheImageSize(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['suggestions' => [], 'products' => []]);
+
+        $client->search()->suggest('vŕta', imageSize: 100);
+
+        self::assertStringContainsString('image_size=100', (string) $this->sentRequests()[0]->getUri());
+    }
+
+    public function testSuggestRejectsAnUnsupportedImageSize(): void
+    {
+        $client = $this->client();
+
+        $this->expectException(ConfigurationException::class);
+
+        try {
+            $client->search()->suggest('vŕta', imageSize: 120);
+        } finally {
+            self::assertCount(0, $this->sentRequests());
+        }
     }
 
     public function testReadRequestUsesThePublicKeyOnly(): void

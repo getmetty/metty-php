@@ -3,6 +3,19 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `SearchQuery::imageSize()` and the `imageSize` argument of `SearchApi::suggest()` request the
+  size of the product `image` (`image_size`); only the sizes in `SearchQuery::IMAGE_SIZES` are
+  accepted, anything else is a `ConfigurationException` before the request.
+
+### Fixed
+
+- `image_size` is a reserved search parameter, so `facet('image_size', …)` fails locally instead of
+  being rejected by the server.
+
 ## [1.2.0] — 2026-09-25
 
 ### Fixed
