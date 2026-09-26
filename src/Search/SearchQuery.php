@@ -9,10 +9,10 @@ use Metty\Client\Exception\ConfigurationException;
 /**
  * Builder for the `GET /search` parameters.
  *
- * Facets are ordinary fields from the catalog: `facet('colour', 'white')` means AND across fields
- * and OR within the values of one field. Server boundaries (`per_page`, the 200 result window, the
- * list of sorts) are checked here so that the error arrives before the request instead of as a
- * `422` from the server.
+ * Facets are ordinary fields from the catalog, sent as `filter[<field>][]`:
+ * `facet('colour', 'white')` means AND across fields and OR within the values of one field. Server
+ * boundaries (`per_page`, the 200 result window, the list of sorts) are checked here so that the
+ * error arrives before the request instead of as a `422` from the server.
  */
 final class SearchQuery
 {
@@ -26,8 +26,6 @@ final class SearchQuery
     public const SECTIONS = ['facets', 'categories', 'suggestions'];
 
     public const IMAGE_SIZES = [40, 60, 80, 100, 150, 200, 250, 300, 400, 500];
-
-    private const RESERVED = ['key', 'q', 'page', 'per_page', 'category', 'price_min', 'price_max', 'sort', 'include', 'image_size'];
 
     /** @var list<string> */
     private array $categories = [];
@@ -71,10 +69,6 @@ final class SearchQuery
 
     public function facet(string $field, string $value): self
     {
-        if (in_array($field, self::RESERVED, true)) {
-            throw new ConfigurationException(sprintf('The name "%s" is a reserved search parameter and cannot be a facet.', $field));
-        }
-
         $this->facets[$field][] = $value;
 
         return $this;
@@ -182,7 +176,7 @@ final class SearchQuery
         ];
 
         foreach ($this->facets as $field => $values) {
-            $parameters[$field] = $values;
+            $parameters[sprintf('filter[%s]', $field)] = $values;
         }
 
         return array_filter($parameters, static fn (mixed $value): bool => $value !== null);
