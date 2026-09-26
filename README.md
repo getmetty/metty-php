@@ -27,35 +27,9 @@ composer require symfony/http-client nyholm/psr7
 
 ## Timeouts
 
-Autodiscovery (`php-http/discovery`) picks whatever client it finds, and none of the
-implementations guarantee a timeout — with the wrong one a request can hang until the PHP process
-is killed. Configure the connect and total timeouts yourself and pass the ready-made client in:
-
-```php
-use Metty\Client\Configuration;
-use Metty\Client\MettyClient;
-use Nyholm\Psr7\Factory\Psr17Factory;
-use Symfony\Component\HttpClient\HttpClient;
-use Symfony\Component\HttpClient\Psr18Client;
-
-$psr17 = new Psr17Factory();
-$httpClient = new Psr18Client(
-    HttpClient::create(['timeout' => 10, 'max_duration' => 30]),
-    $psr17,
-    $psr17,
-);
-
-$client = new MettyClient(
-    new Configuration('<PUBLIC_API_KEY>', '<SECRET_API_KEY>'),
-    $httpClient,
-    $psr17,
-    $psr17,
-);
-```
-
-`timeout` is the idle timeout of the connection, `max_duration` the ceiling for the whole request;
-Guzzle calls the same pair `connect_timeout` and `timeout`. They bound a single attempt — a retried
-call also waits between the attempts, at most 60 s per retry when the server sends `Retry-After`.
+Discovery does not guarantee a timeout, so a request can hang until the PHP process is killed.
+Pass in a PSR-18 client with connect and total timeouts set, as shown in
+[docs.metty.eu/client/php#timeouts](https://docs.metty.eu/client/php#timeouts).
 
 ## Keys
 
@@ -216,8 +190,9 @@ foreach ($client->catalog()->export() as $product) {
 - **partial failure** — a batch never fails as a whole; you get the status of every product
 - **server boundaries** — an unknown sort, section, or a page outside the ranked window fails
   locally instead of coming back as a `422`
-- **retry with backoff** — `429` always (honouring `Retry-After`), a server or network error only
-  for methods that are safe to repeat; other `4xx` never
+- **retry with backoff** — `429` for catalog calls (honouring `Retry-After`), a server or network
+  error only for methods that are safe to repeat; other `4xx` never. `search()` and `suggest()`
+  throw a `429` at once (`ApiException::isRateLimited()`) instead of blocking the page render
 
 No idempotency key is needed: the server writes by `id`, so a repeated batch cannot create
 duplicates. `Authorization` is never logged and never ends up in an exception.
