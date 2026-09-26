@@ -9,10 +9,10 @@ use Metty\Client\Exception\ConfigurationException;
 /**
  * Builder for the `GET /search` parameters.
  *
- * Facets are ordinary fields from the catalog, sent as `filter[<field>][]`: `facet('colour', 'white')`
- * means AND across fields and OR within the values of one field. Server boundaries (`per_page`, the 200 result window, the
- * list of sorts) are checked here so that the error arrives before the request instead of as a
- * `422` from the server.
+ * Facets are ordinary fields from the catalog, sent as `filter[<field>][]`:
+ * `facet('colour', 'white')` means AND across fields and OR within the values of one field. Server
+ * boundaries (`per_page`, the 200 result window, the list of sorts) are checked here so that the
+ * error arrives before the request instead of as a `422` from the server.
  */
 final class SearchQuery
 {
