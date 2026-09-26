@@ -47,12 +47,20 @@ final class SearchApi
         } while ($response->hasNextPage());
     }
 
-    public function suggest(string $query, int $limit = 8): SuggestResponse
+    /**
+     * `$imageSize` is the largest edge of the product `image` in pixels, one of `SearchQuery::IMAGE_SIZES`.
+     */
+    public function suggest(string $query, int $limit = 8, ?int $imageSize = null): SuggestResponse
     {
         if ($limit < 1 || $limit > self::MAX_SUGGEST_LIMIT) {
             throw new ConfigurationException(sprintf('The suggest limit must be between 1 and %d.', self::MAX_SUGGEST_LIMIT));
         }
 
-        return SuggestResponse::fromArray($this->transport->get('/suggest', ['q' => $query, 'limit' => $limit]));
+        $parameters = ['q' => $query, 'limit' => $limit];
+        if ($imageSize !== null) {
+            $parameters['image_size'] = SearchQuery::checkImageSize($imageSize);
+        }
+
+        return SuggestResponse::fromArray($this->transport->get('/suggest', $parameters));
     }
 }
