@@ -3,7 +3,7 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] — 2026-09-28
 
 ### Added
 
@@ -23,8 +23,6 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versio
   page render. Catalog calls still retry a `429`; server and network errors on reads are still
   retried with a short backoff.
 - The README "Timeouts" section moved to [docs.metty.eu/client/php](https://docs.metty.eu/client/php#timeouts).
-
-## [1.2.0] — 2026-09-25
 
 ### Fixed
 
