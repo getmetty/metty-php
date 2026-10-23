@@ -3,6 +3,14 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `CatalogProduct` accepts `item_group_id` and `create()` has an `itemGroupId` argument. Products with
+  the same value count as one product towards the Metty plan limit. Requires the matching Catalog API
+  release; an older server ignores the field.
+
 ## [1.2.0] — 2026-09-28
 
 ### Added

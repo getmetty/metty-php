@@ -42,7 +42,7 @@ final class CatalogApiTest extends TestCase
         $this->queueJson(['results' => [['id' => 'sku-1', 'status' => 'ok']]]);
 
         $client->catalog()->replace([
-            CatalogProduct::create('sku-1', 'Vŕtačka', 'https://e.sk/1', price: 129.9, inStock: true, brand: 'Bosch', params: ['farba' => 'modrá']),
+            CatalogProduct::create('sku-1', 'Vŕtačka', 'https://e.sk/1', price: 129.9, inStock: true, brand: 'Bosch', params: ['farba' => 'modrá'], itemGroupId: 'drill-1'),
         ]);
 
         $body = json_decode((string) $this->sentRequests()[0]->getBody(), true);
@@ -54,6 +54,7 @@ final class CatalogApiTest extends TestCase
             'price' => 129.9,
             'in_stock' => true,
             'brand' => 'Bosch',
+            'item_group_id' => 'drill-1',
             'params' => ['farba' => 'modrá'],
         ]], $body);
     }

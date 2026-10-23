@@ -144,6 +144,9 @@ $client->catalog()->patch([
 ]);
 ```
 
+`itemGroupId` (`item_group_id`) groups variants of one product, for example the sizes of a T-shirt:
+products with the same value count as one product towards your Metty plan limit.
+
 `params` is the only source of facetable attributes — the same place facets from an XML feed end up
 in.
 
