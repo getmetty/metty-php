@@ -15,7 +15,7 @@ use Metty\Client\Exception\ConfigurationException;
  */
 final class CatalogProduct implements \JsonSerializable
 {
-    public const FIELDS = ['name', 'url', 'price', 'list_price', 'currency', 'in_stock', 'brand', 'category', 'description', 'image', 'params'];
+    public const FIELDS = ['name', 'url', 'price', 'list_price', 'currency', 'in_stock', 'brand', 'item_group_id', 'category', 'description', 'image', 'params'];
 
     /**
      * @param array<string, mixed> $fields
@@ -39,7 +39,8 @@ final class CatalogProduct implements \JsonSerializable
     }
 
     /**
-     * @param array<string, scalar> $params facetable attributes, for example `['colour' => 'blue']`
+     * @param array<string, scalar> $params      facetable attributes, for example `['colour' => 'blue']`
+     * @param string|null           $itemGroupId variant group; products with the same value count as one product towards the plan limit
      */
     public static function create(
         string $id,
@@ -54,6 +55,7 @@ final class CatalogProduct implements \JsonSerializable
         ?float $listPrice = null,
         ?string $currency = null,
         array $params = [],
+        ?string $itemGroupId = null,
     ): self {
         $fields = ['name' => $name, 'url' => $url];
 
@@ -66,6 +68,7 @@ final class CatalogProduct implements \JsonSerializable
             'description' => $description,
             'list_price' => $listPrice,
             'currency' => $currency,
+            'item_group_id' => $itemGroupId,
         ] as $field => $value) {
             if ($value !== null) {
                 $fields[$field] = $value;
