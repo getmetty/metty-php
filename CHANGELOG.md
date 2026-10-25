@@ -3,6 +3,23 @@
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), versioning follows
 [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `synchronize()` rejects an empty snapshot before opening a sync on the server.
+- `commit()` validates the response and throws a `TransportException` when `sync_id`, `status`,
+  `kept` or `removed` is missing or has the wrong type.
+- A request body that cannot be encoded as JSON (for example invalid UTF-8) throws a
+  `ConfigurationException` instead of a raw `JsonException`.
+- A network failure message now includes the cause, and a retried network error is logged like a
+  retried status.
+
+### Removed
+
+- The nested `{"error": {"code", "message"}}` error shape is no longer decoded; the API returns the
+  flat `{"error", "message"}` form only.
+
 ## [1.3.0] — 2026-10-23
 
 ### Added

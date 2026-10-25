@@ -8,6 +8,7 @@ use Http\Discovery\Psr17FactoryDiscovery;
 use Http\Discovery\Psr18ClientDiscovery;
 use Metty\Client\Configuration;
 use Metty\Client\Exception\ApiException;
+use Metty\Client\Exception\ConfigurationException;
 use Metty\Client\Exception\TransportException;
 use Psr\Http\Client\ClientExceptionInterface;
 use Psr\Http\Client\ClientInterface;
@@ -102,9 +103,14 @@ final class Transport
                 $response = $this->httpClient->sendRequest($this->buildRequest($method, $path, $query, $body, $catalog));
             } catch (ClientExceptionInterface $exception) {
                 if (!$this->mayRepeat($method) || $attempt > $this->configuration->maxRetries) {
-                    throw new TransportException(sprintf('The request to Metty failed (%s).', $exception::class));
+                    throw new TransportException(sprintf('The request to Metty failed (%s: %s).', $exception::class, $exception->getMessage()));
                 }
 
+                $this->logger->warning('Metty request retried.', [
+                    'path' => $path,
+                    'exception' => $exception::class,
+                    'attempt' => $attempt,
+                ]);
                 $this->wait($attempt, null);
                 continue;
             }
@@ -172,9 +178,15 @@ final class Transport
         }
 
         if ($body !== null) {
+            try {
+                $json = json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            } catch (\JsonException $exception) {
+                throw new ConfigurationException('The request body could not be encoded as JSON: ' . $exception->getMessage(), 0, $exception);
+            }
+
             $request = $request
                 ->withHeader('Content-Type', 'application/json')
-                ->withBody($this->streamFactory->createStream((string) json_encode($body, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
+                ->withBody($this->streamFactory->createStream($json));
         }
 
         return $request;
@@ -233,10 +245,6 @@ final class Transport
         }
 
         $error = $payload['error'] ?? null;
-        if (is_array($error)) {
-            $payload = $error;
-            $error = $error['code'] ?? null;
-        }
 
         return new ApiException(
             $status,

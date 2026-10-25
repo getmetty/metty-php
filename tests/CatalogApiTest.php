@@ -171,11 +171,26 @@ final class CatalogApiTest extends TestCase
     public function testEmptySnapshotIsNeverCommitted(): void
     {
         $client = $this->client();
-        $this->queueJson(['sync_id' => 'sync_abc']);
 
-        $this->expectExceptionMessageMatches('/would delete the whole catalog/');
+        try {
+            $client->catalog()->synchronize([], force: true);
+            self::fail('Expected a ConfigurationException.');
+        } catch (ConfigurationException $exception) {
+            self::assertMatchesRegularExpression('/would delete the whole catalog/', $exception->getMessage());
+        }
 
-        $client->catalog()->synchronize([], force: true);
+        self::assertCount(0, $this->sentRequests(), 'An empty snapshot must not open a sync.');
+    }
+
+    public function testIncompleteCommitResponseIsRejected(): void
+    {
+        $client = $this->client();
+        $this->queueJson(['sync_id' => 'sync_abc', 'status' => 'committed']);
+
+        $this->expectException(TransportException::class);
+        $this->expectExceptionMessage('incomplete sync commit response');
+
+        $client->catalog()->commit('sync_abc');
     }
 
     public function testExportFollowsThePages(): void

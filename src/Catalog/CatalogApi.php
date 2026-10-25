@@ -88,10 +88,23 @@ final class CatalogApi
      */
     public function commit(string $syncId, bool $force = false): array
     {
-        /** @var array{sync_id: string, status: string, kept: int, removed: int} $response */
         $response = $this->transport->send('POST', self::SYNCS_PATH . '/' . rawurlencode($syncId) . '/commit', [], ['force' => $force], true);
 
-        return $response;
+        if (
+            !is_string($response['sync_id'] ?? null) || $response['sync_id'] === ''
+            || !is_string($response['status'] ?? null) || $response['status'] === ''
+            || !is_int($response['kept'] ?? null)
+            || !is_int($response['removed'] ?? null)
+        ) {
+            throw new TransportException('Metty returned an incomplete sync commit response.');
+        }
+
+        return [
+            'sync_id' => $response['sync_id'],
+            'status' => $response['status'],
+            'kept' => $response['kept'],
+            'removed' => $response['removed'],
+        ];
     }
 
     /**
@@ -106,12 +119,13 @@ final class CatalogApi
      */
     public function synchronize(iterable $products, bool $force = false): array
     {
-        $syncId = $this->beginSync();
-        $result = $this->replace($products, $syncId);
-
-        if (count($result) === 0) {
+        $items = (static fn () => yield from $products)();
+        if (!$items->valid()) {
             throw new ConfigurationException('A full sync needs at least one product; committing an empty snapshot would delete the whole catalog.');
         }
+
+        $syncId = $this->beginSync();
+        $result = $this->replace($items, $syncId);
 
         if ($result->hasFailures()) {
             throw new SyncIncompleteException($syncId, $result);
