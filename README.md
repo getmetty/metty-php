@@ -177,7 +177,7 @@ try {
 
 This safeguard cannot be turned off. `force: true` applies solely to the server-side safeguard that
 rejects a snapshot covering less than half of the catalog. An empty snapshot is always rejected by
-the client.
+the client before a sync is opened.
 
 ## Export
 
@@ -204,7 +204,7 @@ duplicates. `Authorization` is never logged and never ends up in an exception.
 
 | exception | when |
 |---|---|
-| `ConfigurationException` | invalid configuration, or a query the server would reject |
+| `ConfigurationException` | invalid configuration, a query the server would reject, or a request body that cannot be encoded as JSON |
 | `ApiException` | the server returned `{"error": …, "message": …}`; carries `statusCode` and `errorCode` |
 | `SyncIncompleteException` | a full sync did not complete and was therefore not committed |
 | `TransportException` | a network error, or a response that cannot be parsed |

@@ -17,6 +17,7 @@ use Nyholm\Psr7\Factory\Psr17Factory;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RequiresPhp;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
 
 final class TransportTest extends TestCase
 {
@@ -24,22 +25,11 @@ final class TransportTest extends TestCase
 
     public function testCatalogRateLimitIsRetriedWithRetryAfter(): void
     {
-        $psr17 = new Psr17Factory();
-        $httpClient = new MockClient($psr17);
         $slept = [];
-        $transport = new Transport(
-            new Configuration('pk_public', 'sk_secret', maxRetries: 2),
-            $httpClient,
-            $psr17,
-            $psr17,
-            null,
-            static function (int $milliseconds) use (&$slept): void {
-                $slept[] = $milliseconds;
-            },
-        );
+        $transport = $this->transport(2, $slept);
 
-        $httpClient->addResponse($psr17->createResponse(429)->withHeader('Retry-After', '2'));
-        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"results":[]}')));
+        $this->httpClient->addResponse($this->psr17->createResponse(429)->withHeader('Retry-After', '2'));
+        $this->httpClient->addResponse($this->psr17->createResponse(200)->withBody($this->psr17->createStream('{"results":[]}')));
 
         $payload = $transport->send('PUT', '/catalog/products', [], [['id' => 'a']], true);
 
@@ -99,23 +89,15 @@ final class TransportTest extends TestCase
 
     public function testServerErrorIsRetriedForProductBatch(): void
     {
-        $psr17 = new Psr17Factory();
-        $httpClient = new MockClient($psr17);
-        $transport = new Transport(
-            new Configuration('pk_public', 'sk_secret', maxRetries: 1),
-            $httpClient,
-            $psr17,
-            $psr17,
-            null,
-            static function (int $milliseconds): void {},
-        );
+        $slept = [];
+        $transport = $this->transport(1, $slept);
 
-        $httpClient->addResponse($psr17->createResponse(503));
-        $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"results":[]}')));
+        $this->httpClient->addResponse($this->psr17->createResponse(503));
+        $this->httpClient->addResponse($this->psr17->createResponse(200)->withBody($this->psr17->createStream('{"results":[]}')));
 
         $transport->send('PUT', '/catalog/products', [], [['id' => 'a']], true);
 
-        self::assertCount(2, $httpClient->getRequests());
+        self::assertCount(2, $this->httpClient->getRequests());
     }
 
     public function testSecretKeyNeverLeaksIntoException(): void
@@ -163,7 +145,7 @@ final class TransportTest extends TestCase
     public function testRateLimitPayloadKeepsItsErrorCode(): void
     {
         $client = $this->client(maxRetries: 0);
-        $this->queueJson(['error' => ['code' => 'rate_limited', 'message' => 'Too many requests.']], 429);
+        $this->queueJson(['error' => 'rate_limited', 'message' => 'Too many requests; slow down and retry later.'], 429);
 
         try {
             $client->search()->search('x');
@@ -296,24 +278,123 @@ final class TransportTest extends TestCase
         }
     }
 
-    /**
-     * @return list<int>
-     */
-    private function retryAfter(string $header): array
+    public function testRequestBodyThatCannotBeEncodedIsAConfigurationException(): void
+    {
+        $client = $this->client();
+
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('could not be encoded as JSON');
+
+        $client->catalog()->replace([CatalogProduct::create("a\xB1", 'A', 'https://e.sk/a')]);
+    }
+
+    public function testNetworkFailureMessageNamesTheCauseAndRetriesAreLogged(): void
     {
         $psr17 = new Psr17Factory();
         $httpClient = new MockClient($psr17);
-        $slept = [];
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{string, array<mixed>}> */
+            public array $records = [];
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = [(string) $message, $context];
+            }
+        };
         $transport = new Transport(
             new Configuration('pk_public', 'sk_secret', maxRetries: 1),
             $httpClient,
             $psr17,
             $psr17,
+            $logger,
+            static function (int $milliseconds): void {},
+        );
+        $request = $psr17->createRequest('GET', 'https://search.api.metty.eu/search');
+        $httpClient->addException(new NetworkException('Operation timed out.', $request));
+        $httpClient->addException(new NetworkException('Operation timed out.', $request));
+
+        try {
+            $transport->get('/search');
+            self::fail('Expected a TransportException.');
+        } catch (TransportException $exception) {
+            self::assertStringContainsString('Operation timed out.', $exception->getMessage());
+        }
+
+        self::assertCount(1, $logger->records);
+        self::assertSame('Metty request retried.', $logger->records[0][0]);
+        self::assertSame(NetworkException::class, $logger->records[0][1]['exception']);
+    }
+
+    #[DataProvider('retryMatrix')]
+    public function testRetryMatrix(string $method, string $failure, int $expectedRequests): void
+    {
+        $slept = [];
+        $transport = $this->transport(1, $slept);
+        $success = $this->psr17->createResponse(200)->withBody($this->psr17->createStream('{"results":[]}'));
+
+        if ($failure === 'network') {
+            $this->httpClient->addException(new NetworkException('down', $this->psr17->createRequest($method, 'https://catalog.api.metty.eu/x')));
+        } else {
+            $this->httpClient->addResponse($this->psr17->createResponse((int) $failure));
+        }
+
+        $this->httpClient->addResponse($success);
+
+        try {
+            $transport->send($method, '/catalog/products', [], null, true);
+        } catch (TransportException | ApiException) {
+        }
+
+        self::assertCount($expectedRequests, $this->httpClient->getRequests());
+    }
+
+    /**
+     * @return iterable<string, array{string, string, int}>
+     */
+    public static function retryMatrix(): iterable
+    {
+        yield 'GET network' => ['GET', 'network', 2];
+        yield 'PUT network' => ['PUT', 'network', 2];
+        yield 'POST network' => ['POST', 'network', 1];
+        yield 'DELETE network' => ['DELETE', 'network', 1];
+        yield 'GET 429' => ['GET', '429', 2];
+        yield 'POST 429' => ['POST', '429', 2];
+        yield 'DELETE 429' => ['DELETE', '429', 2];
+        yield 'GET 503' => ['GET', '503', 2];
+        yield 'PUT 503' => ['PUT', '503', 2];
+        yield 'POST 503' => ['POST', '503', 1];
+        yield 'DELETE 503' => ['DELETE', '503', 1];
+    }
+
+    /**
+     * @param list<int> $slept
+     */
+    private function transport(int $maxRetries, array &$slept): Transport
+    {
+        $this->psr17 = new Psr17Factory();
+        $this->httpClient = new MockClient($this->psr17);
+
+        return new Transport(
+            new Configuration('pk_public', 'sk_secret', maxRetries: $maxRetries),
+            $this->httpClient,
+            $this->psr17,
+            $this->psr17,
             null,
             static function (int $milliseconds) use (&$slept): void {
                 $slept[] = $milliseconds;
             },
         );
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function retryAfter(string $header): array
+    {
+        $slept = [];
+        $transport = $this->transport(1, $slept);
+        $psr17 = $this->psr17;
+        $httpClient = $this->httpClient;
 
         $httpClient->addResponse($psr17->createResponse(429)->withHeader('Retry-After', $header));
         $httpClient->addResponse($psr17->createResponse(200)->withBody($psr17->createStream('{"results":[]}')));
