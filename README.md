@@ -175,6 +175,10 @@ try {
 }
 ```
 
+Only one sync per e-shop can be open. An open sync expires one hour after its last write; until then
+a new `synchronize()` fails with an `ApiException` whose `errorCode` is `sync_in_progress`, and a
+write or commit under an expired sync fails with `sync_expired`.
+
 This safeguard cannot be turned off. `force: true` applies solely to the server-side safeguard that
 rejects a snapshot covering less than half of the catalog. An empty snapshot is always rejected by
 the client before a sync is opened.
